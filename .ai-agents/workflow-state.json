@@ -1,0 +1,15 @@
+{
+  "workflow_id": null,
+  "state": "IDLE",
+  "loop_count": 0,
+  "max_loops": 3,
+  "created_at": null,
+  "updated_at": null,
+  "branch": null,
+  "artifacts": {
+    "plan": null,
+    "architecture": null,
+    "tests_plan": null,
+    "reviews": []
+  }
+}

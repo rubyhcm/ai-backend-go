@@ -1,0 +1,36 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test
+coverage.out
+*.test
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Generated index (regenerate with make update-index)
+.ai-agents/index/*.json
+
+# Vendor (if not committed)
+# vendor/
+
+# Temporary
+tmp/
+*.tmp

@@ -1,0 +1,114 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    # Defaults
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+    # Code quality
+    - gocyclo
+    - goconst
+    - gocritic
+    - gofmt
+    - goimports
+    - misspell
+    - nakedret
+    - prealloc
+    - revive
+    - unconvert
+    - unparam
+
+    # Security
+    - gosec
+
+    # Error handling
+    - errorlint
+    - wrapcheck
+
+    # Style
+    - bodyclose
+    - noctx
+    - exportloopref
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unreachable-code
+
+  errorlint:
+    errorf: true
+    asserts: true
+    comparison: true
+
+  wrapcheck:
+    ignoreSigs:
+      - .Errorf(
+      - errors.New(
+      - errors.Unwrap(
+      - .Wrap(
+      - .Wrapf(
+      - .WithMessage(
+      - .WithMessagef(
+      - .WithStack(
+
+  gosec:
+    excludes:
+      - G104  # Audit errors not checked (handled by errcheck)
+
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 5
+
+  exclude-rules:
+    # Test files can have longer functions and less strict rules
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - goconst
+        - wrapcheck
+        - gocritic
+
+    # Main files can use os.Exit
+    - path: cmd/
+      linters:
+        - gocritic
+      text: "exitAfterDefer"
