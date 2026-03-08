@@ -1,4 +1,17 @@
-# AI Agents for Claude Code - Usage Guide
+# Usage Guide
+
+This guide provides instructions on how to use the tools in this repository.
+
+## Indexer
+
+The indexer is a tool that generates a code index for the AI agent. To run the indexer, use the following command:
+
+```bash
+make index
+```
+
+This will generate the index files in the `.ai-agents/index` directory.
+
 
 ## Prerequisites
 
@@ -660,3 +673,33 @@ your-project/
     +-- indexer/
         +-- main.go              # Code indexer (Go AST parser using stdlib)
 ```
+
+#### Using
+
+  ┌───────────────┬─────────────────┬─────────────────────────────────────────────┐
+  │    Command    │      File       │                  Chức năng                  │
+  ├───────────────┼─────────────────┼─────────────────────────────────────────────┤
+  │ /agent-plan   │ agent-plan.md   │ Thiết kế architecture, tạo plan             │
+  ├───────────────┼─────────────────┼─────────────────────────────────────────────┤
+  │ /agent-code   │ agent-code.md   │ Generate code theo plan                     │
+  ├───────────────┼─────────────────┼─────────────────────────────────────────────┤
+  │ /agent-test   │ agent-test.md   │ Generate table-driven tests                 │
+  ├───────────────┼─────────────────┼─────────────────────────────────────────────┤
+  │ /agent-fix    │ agent-fix.md    │ Debug và fix bugs                           │
+  ├───────────────┼─────────────────┼─────────────────────────────────────────────┤
+  │ /agent-review │ agent-review.md │ Code review + security audit                │
+  ├───────────────┼─────────────────┼─────────────────────────────────────────────┤
+  │ /agent-full   │ agent-full.md   │ Full pipeline (plan → code → test → review) │
+  └───────────────┴─────────────────┴─────────────────────────────────────────────┘
+
+  Cách dùng:
+
+  Khởi động lại Claude Code trong project centre-auth-service:
+  cd /home/loinguyen/agrios/centre-auth-service
+  claude
+
+  Sau đó:
+  /agent-test
+  /agent-plan "Add new feature X"
+  /agent-fix "error: nil pointer at internal/usecase/auth.go:42"
+  /agent-full "Add 2FA support"
