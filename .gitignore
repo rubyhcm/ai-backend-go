@@ -26,7 +26,7 @@ Thumbs.db
 .env.*.local
 
 # Generated index (regenerate with make update-index)
-.ai-agents/index/*.json
+.ai-agents/
 
 # Vendor (if not committed)
 # vendor/

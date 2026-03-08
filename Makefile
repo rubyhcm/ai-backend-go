@@ -75,26 +75,22 @@ run:
 clean:
 	rm -rf bin/ coverage.out
 
-# ============================================================
-# Help
-# ============================================================
+.PHONY: index
 
-## Show this help
+BIN_DIR := $(CURDIR)/bin
+INDEXER_OUT_DIR := $(CURDIR)/.ai-agents/index
+
+# Indexing
+# ======================================================================================================================
+index:
+	@echo "--> Running indexer..."
+	@mkdir -p $(INDEXER_OUT_DIR)
+	@go run $(CURDIR)/tools/indexer/main.go -dir $(CURDIR) -out $(INDEXER_OUT_DIR)
+
+.PHONY: help
 help:
-	@echo "Available targets:"
+	@echo "Usage: make [target]"
 	@echo ""
-	@grep -E '^## ' Makefile | sed 's/^## /  /'
-	@echo ""
-	@echo "AI Agent commands:"
-	@echo "  make update-index    - Update code index for AI agents"
-	@echo "  make check           - Run all quality checks (lint + security + test)"
-	@echo ""
-	@echo "Testing:"
-	@echo "  make test            - Run unit tests"
-	@echo "  make test-race       - Run tests with race detector"
-	@echo "  make test-integration - Run integration tests"
-	@echo "  make test-coverage   - Run tests with coverage report"
-	@echo ""
-	@echo "Code Quality:"
-	@echo "  make lint            - Run golangci-lint"
-	@echo "  make security-scan   - Run gosec + govulncheck"
+	@echo "Targets:"
+	@echo "  index                            - Run the indexer to generate AI agent context."
+	@echo "  help                             - Show this help message."

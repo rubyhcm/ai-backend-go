@@ -46,6 +46,8 @@ type PackageInfo struct {
 	Types      int      `json:"types"`
 	Functions  int      `json:"functions"`
 	Interfaces int      `json:"interfaces"`
+	Constants  int      `json:"constants"`
+	Variables  int      `json:"variables"`
 }
 
 func main() {
@@ -135,10 +137,10 @@ func main() {
 				}
 				if d.Recv != nil && len(d.Recv.List) > 0 {
 					sym.Kind = "method"
-					sym.Signature = formatRecv(d.Recv.List[0].Type) + "." + d.Name.Name
+					sym.Signature = formatSignature(d)
 				} else {
 					sym.Kind = "func"
-					sym.Signature = d.Name.Name
+					sym.Signature = formatSignature(d)
 				}
 				symbols = append(symbols, sym)
 				pkgMap[pkgDir].Functions++
@@ -169,22 +171,24 @@ func main() {
 						}
 						symbols = append(symbols, sym)
 
-					case *ast.ValueSpec:
-						for _, name := range s.Names {
-							kind := "var"
-							if d.Tok == token.CONST {
-								kind = "const"
-							}
-							symbols = append(symbols, Symbol{
-								Name:     name.Name,
-								Kind:     kind,
-								Package:  pkgName,
-								File:     relPath,
-								Line:     fset.Position(name.Pos()).Line,
-								Exported: name.IsExported(),
-							})
-						}
-					}
+											case *ast.ValueSpec:
+												for _, name := range s.Names {
+													kind := "var"
+													if d.Tok == token.CONST {
+														kind = "const"
+														pkgMap[pkgDir].Constants++
+													} else {
+														pkgMap[pkgDir].Variables++
+													}
+													symbols = append(symbols, Symbol{
+														Name:     name.Name,
+														Kind:     kind,
+														Package:  pkgName,
+														File:     relPath,
+														Line:     fset.Position(name.Pos()).Line,
+														Exported: name.IsExported(),
+													})
+												}					}
 				}
 			}
 		}
@@ -212,6 +216,69 @@ func main() {
 		len(symbols), len(imports), len(packages))
 }
 
+func formatSignature(f *ast.FuncDecl) string {
+	var sb strings.Builder
+	sb.WriteString("func ")
+	if f.Recv != nil && len(f.Recv.List) > 0 {
+		sb.WriteString("(")
+		sb.WriteString(formatExpr(f.Recv.List[0].Type))
+		sb.WriteString(") ")
+	}
+	sb.WriteString(f.Name.Name)
+	sb.WriteString("(")
+	sb.WriteString(formatParams(f.Type.Params))
+	sb.WriteString(")")
+
+	if f.Type.Results != nil && len(f.Type.Results.List) > 0 {
+		sb.WriteString(" ")
+		results := formatResults(f.Type.Results)
+		if len(results) > 1 {
+			sb.WriteString("(")
+		}
+		sb.WriteString(strings.Join(results, ", "))
+		if len(results) > 1 {
+			sb.WriteString(")")
+		}
+	}
+
+	return sb.String()
+}
+
+func formatParams(fields *ast.FieldList) string {
+	var params []string
+	if fields != nil {
+		for _, p := range fields.List {
+			typ := formatExpr(p.Type)
+			for _, name := range p.Names {
+				params = append(params, name.Name+" "+typ)
+			}
+			if len(p.Names) == 0 {
+				params = append(params, typ)
+			}
+		}
+	}
+	return strings.Join(params, ", ")
+}
+
+func formatResults(fields *ast.FieldList) []string {
+	var results []string
+	if fields != nil {
+		for _, r := range fields.List {
+			typ := formatExpr(r.Type)
+			if len(r.Names) > 0 {
+				var names []string
+				for _, name := range r.Names {
+					names = append(names, name.Name)
+				}
+				results = append(results, strings.Join(names, ", ")+" "+typ)
+			} else {
+				results = append(results, typ)
+			}
+		}
+	}
+	return results
+}
+
 func writeJSON(path string, v interface{}) {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
@@ -224,16 +291,25 @@ func writeJSON(path string, v interface{}) {
 	}
 }
 
-func formatRecv(expr ast.Expr) string {
+func formatExpr(expr ast.Expr) string {
 	switch t := expr.(type) {
 	case *ast.StarExpr:
-		if ident, ok := t.X.(*ast.Ident); ok {
-			return "*" + ident.Name
-		}
+		return "*" + formatExpr(t.X)
 	case *ast.Ident:
 		return t.Name
+	case *ast.SelectorExpr:
+		return formatExpr(t.X) + "." + t.Sel.Name
+	case *ast.ArrayType:
+		return "[]" + formatExpr(t.Elt)
+	case *ast.MapType:
+		return "map[" + formatExpr(t.Key) + "]" + formatExpr(t.Value)
+	case *ast.InterfaceType:
+		if t.Methods == nil || len(t.Methods.List) == 0 {
+			return "interface{}"
+		}
+		return "interface{...}" // Simplified for brevity
 	}
-	return "?"
+	return "unknown"
 }
 
 func extractFieldNames(fields *ast.FieldList) []string {
@@ -242,12 +318,13 @@ func extractFieldNames(fields *ast.FieldList) []string {
 	}
 	var names []string
 	for _, f := range fields.List {
+		// For named fields, add their names.
 		for _, name := range f.Names {
 			names = append(names, name.Name)
 		}
-		// Embedded fields (no name).
+		// For embedded fields, format their type.
 		if len(f.Names) == 0 {
-			names = append(names, formatRecv(f.Type))
+			names = append(names, formatExpr(f.Type))
 		}
 	}
 	return names
