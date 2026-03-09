@@ -282,8 +282,33 @@ Timestamp: [ISO-8601]
 - [Prioritized list of fixes needed]
 ```
 
+## Auto-Fix Security Issues
+
+After completing the scan and AI review:
+
+```
+IF any CRITICAL or HIGH findings exist:
+  1. Set state to "SECURITY_FIXING"
+  2. Update workflow-state.json: increment security_fix_count
+  3. If security_fix_count > max_security_fixes (3):
+       → Set state to "ESCALATED"
+       → Stop. Report to user: "Security auto-fix loop exceeded 3 attempts. Manual intervention required."
+       → DO NOT proceed to review
+  4. Else: invoke Agent Fix Security automatically:
+       → Read prompts/agent-fix-security.md
+       → Pass list of CRITICAL and HIGH findings as input
+       → Agent Fix Security applies fixes
+       → Create report: reports/<unix_timestamp>_fix_security_agent.md
+  5. After fix: re-run this security scan (Agent Security) on the same files
+  6. Repeat until CLEAN or max_security_fixes exceeded
+
+IF no CRITICAL or HIGH findings (CLEAN):
+  → Set state to "REVIEWING"
+  → Record security scan results in artifacts
+```
+
 ## Update Workflow State
 
-After completing, update `.ai-agents/workflow-state.json`:
-- Set `state` to `"REVIEWING"`
-- Record security scan results in artifacts
+After completing:
+- If CRITICAL/HIGH found: set `state` to `"SECURITY_FIXING"`, increment `security_fix_count`
+- If CLEAN: set `state` to `"REVIEWING"`, record security scan results in artifacts

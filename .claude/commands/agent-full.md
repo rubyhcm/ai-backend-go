@@ -35,10 +35,19 @@ Execute the full pipeline in this exact order:
 - Format and check changed files only.
 - Create report: `reports/<unix_timestamp>_lint_agent.md`
 
-#### 3c: SECURITY SCANNING
+#### 3c: SECURITY SCANNING + AUTO-FIX
 - Read `prompts/agent-security.md` and execute Agent Security.
-- Scan changed files for vulnerabilities.
+- Scan changed files for vulnerabilities (gosec, govulncheck, Semgrep, Snyk).
 - Create report: `reports/<unix_timestamp>_security_agent.md`
+- **If CRITICAL or HIGH findings found:**
+  - Set state to `SECURITY_FIXING`, increment `security_fix_count`
+  - If `security_fix_count > 3`: ESCALATE to user, stop pipeline entirely
+  - Read `prompts/agent-fix-security.md` and execute Agent Fix Security
+  - Agent Fix Security fixes CRITICAL findings first, then HIGH
+  - Create report: `reports/<unix_timestamp>_fix_security_agent.md`
+  - Re-run Agent Security (back to step 3c) to verify fixes
+  - Repeat until CLEAN or max attempts exceeded
+- **If CLEAN (no CRITICAL/HIGH):** Set state to `REVIEWING`, proceed to 3d
 
 #### 3d: REVIEWING
 - Read `prompts/agent-review.md` and execute Agent Review.

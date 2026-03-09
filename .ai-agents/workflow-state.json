@@ -6,6 +6,8 @@
   "completed_tasks": 0,
   "loop_count": 0,
   "max_loops": 3,
+  "security_fix_count": 0,
+  "max_security_fixes": 3,
   "created_at": "",
   "updated_at": "",
   "branch": "",
