@@ -92,7 +92,8 @@ Testing quality:
   - [ ] Every test case has meaningful assertions
   - [ ] Error paths tested (not just happy path)
   - [ ] Mocks properly verify expectations (defer ctrl.Finish())
-  - [ ] Coverage meets target (domain 90%, service 85%, handler 80%)
+  - [ ] Coverage >= 80% overall (domain 90%, service 85%, handler 80%) — HARD GATE
+  - [ ] If coverage < 80%: verdict MUST be NEEDS CHANGES regardless of other findings
 ```
 
 ## Severity Levels
@@ -145,7 +146,9 @@ Save review to `.ai-agents/reviews/review-<N>.md`:
 - **Context usage:** [OK / Issues]
 
 ### Testing
-- **Coverage:** [X]%
+- **Coverage:** [X]% (gate: >= 80%)
+- **Coverage gate:** [PASS / FAIL — below 80%]
+- **Per-package:** domain [X]% / service [X]% / handler [X]%
 - **Quality:** [Good / Issues found]
 - **Missing tests:** [None / List]
 

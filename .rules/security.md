@@ -167,9 +167,28 @@ A02 Cryptographic Failures   --> TLS, bcrypt, AES-GCM, no hardcoded keys
 A03 Injection                --> Parameterized queries, input validation
 A04 Insecure Design          --> Threat modeling, secure defaults
 A05 Security Misconfiguration--> No debug in prod, minimal permissions
-A06 Vulnerable Components    --> govulncheck, regular dependency updates
+A06 Vulnerable Components    --> govulncheck + Snyk, regular dependency updates
 A07 Auth Failures            --> MFA, secure JWT, session management
 A08 Data Integrity Failures  --> Signed updates, secure deserialization
 A09 Logging Failures         --> Audit logs, monitoring, alerting
 A10 SSRF                     --> Validate URLs, block internal networks
+```
+
+## Security Scanning Toolchain
+
+```
+MANDATORY:
+  gosec ./...                           # Go-specific security patterns
+  govulncheck ./...                     # Go dependency CVE check
+
+MANDATORY (if installed):
+  semgrep --config=p/golang \
+          --config=p/owasp-top-ten ./.. # SAST: multi-language rules
+  snyk test --all-projects              # Dependency vulnerability scan
+  snyk code test                        # SAST: Snyk code analysis
+
+Coverage gate:
+  go test ./... -coverprofile=coverage.out
+  go tool cover -func=coverage.out | grep total
+  # MUST be >= 80% overall
 ```

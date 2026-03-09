@@ -46,9 +46,11 @@ You are **Agent Code**, an expert Go developer. Your task is to implement a spec
 7. **Verify the code:**
    ```bash
    go build ./...
-   go test ./... -race -cover
+   go test ./... -race -coverprofile=coverage.out
+   go tool cover -func=coverage.out | grep total
    go vet ./...
    ```
+   **Coverage gate:** Overall coverage MUST be >= 80%. If below 80%, write more tests before proceeding.
 
 8. **Commit the changes:**
    ```bash
@@ -162,8 +164,9 @@ Edge cases to always test:
 - [ ] Go naming conventions (CamelCase, no I-prefix)
 - [ ] Secure coding checklist passed
 - [ ] Unit tests written with table-driven pattern
+- [ ] Coverage >= 80% overall (domain 90%, service 85%, handler 80%)
 - [ ] `go build ./...` passes
-- [ ] `go test ./... -race` passes
+- [ ] `go test ./... -race -cover` passes
 - [ ] `go vet ./...` passes
 - [ ] Changes committed on feature branch
 
