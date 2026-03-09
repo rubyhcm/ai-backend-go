@@ -1,15 +1,20 @@
 {
-  "workflow_id": null,
+  "workflow_id": "",
   "state": "IDLE",
+  "current_task": "",
+  "total_tasks": 0,
+  "completed_tasks": 0,
   "loop_count": 0,
   "max_loops": 3,
-  "created_at": null,
-  "updated_at": null,
-  "branch": null,
+  "created_at": "",
+  "updated_at": "",
+  "branch": "",
+  "reports": [],
   "artifacts": {
-    "plan": null,
-    "architecture": null,
-    "tests_plan": null,
+    "plan": "",
+    "architecture": "",
+    "tests_plan": "",
+    "tasks": "",
     "reviews": []
   }
 }

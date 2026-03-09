@@ -1,6 +1,6 @@
 # Testing Rules - Go Backend
 
-## Table-Driven Tests (BAT BUOC)
+## Table-Driven Tests (MANDATORY)
 
 ```go
 func TestUserService_GetByID(t *testing.T) {
@@ -67,33 +67,33 @@ func TestUserService_GetByID(t *testing.T) {
 }
 ```
 
-## Assertion Rules (CHONG COVERAGE TRAP)
+## Assertion Rules (ANTI COVERAGE TRAP)
 
 ```
-BAT BUOC: Moi test case PHAI co assert/require:
-  - assert gia tri tra ve (KHONG chi goi ham roi bo qua result)
-  - assert error (wantErr true --> require.Error, false --> require.NoError)
-  - assert state thay doi (neu co side effect, verify mock expectations)
+MANDATORY: Every test case MUST have assert/require:
+  - assert returned value (NEVER just call function and ignore result)
+  - assert error (wantErr true → require.Error, false → require.NoError)
+  - assert state changes (if side effects exist, verify mock expectations)
 
-FORBIDDEN: Test chi goi function ma khong assert gi
-FORBIDDEN: Test voi empty assert (assert.True(t, true))
-FORBIDDEN: Test khong check error return
-FORBIDDEN: Mock tra ve gia tri ma khong verify duoc goi
+FORBIDDEN: Test that only calls a function without any assertion
+FORBIDDEN: Test with empty assertions (assert.True(t, true))
+FORBIDDEN: Test that does not check error return
+FORBIDDEN: Mock returning a value that is never verified
 
-Example KHONG CHAP NHAN:
+Example NOT ACCEPTED:
   func TestBad(t *testing.T) {
       svc := NewService(repo)
-      svc.Process(ctx, input) // <-- khong assert gi = coverage trap
+      svc.Process(ctx, input) // <-- no assertion = coverage trap
   }
 ```
 
 ## Mocking
 
 ```
-REQUIRED: gomock cho interface mocking
-REQUIRED: testify/assert + testify/require cho assertions
-OPTIONAL: testify/mock khi can flexibility
-REQUIRED: Mock EXPECTATIONS phai duoc verify
+REQUIRED: gomock for interface mocking
+REQUIRED: testify/assert + testify/require for assertions
+OPTIONAL: testify/mock when flexibility is needed
+REQUIRED: Mock EXPECTATIONS must be verified
 
 // Generate mocks
 //go:generate mockgen -source=user_service.go -destination=mock_user_repo_test.go -package=service
@@ -110,8 +110,8 @@ repo := NewMockUserRepo(ctrl)
 Unit tests:        internal/service/user_service_test.go     (same package)
 Handler tests:     internal/handler/user_handler_test.go      (same package)
 Integration tests: tests/integration/user_test.go             (separate dir)
-Test helpers:       internal/testutil/helpers.go               (shared test utils)
-Test fixtures:      testdata/                                  (test data files)
+Test helpers:      internal/testutil/helpers.go               (shared test utils)
+Test fixtures:     testdata/                                  (test data files)
 ```
 
 ## Integration Tests

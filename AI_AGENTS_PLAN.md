@@ -6,7 +6,7 @@
 
 ## Overview
 
-Build 5 specialized AI Agents operating within Claude Code, coordinated by a Workflow Orchestrator, serving the Go backend development lifecycle.
+Define 5 specialized AI Agents operating within Claude Code, coordinated by a Workflow Orchestrator, for the Go backend development lifecycle.
 
 ---
 
@@ -47,9 +47,9 @@ graph TD
 
     subgraph Tools
         Git[Git - blame/log -p/diff]
-        SA[golangci-lint / gosec / govulncheck]
-        TR[go test]
-        DS[govulncheck / trivy]
+      SA[Project static analysis tools]
+      TR[Project test commands]
+      DS[Dependency/security scanners]
     end
 
     subgraph Project Rules
@@ -193,15 +193,8 @@ Agent Code **must validate** `architecture.md` before generating code:
 Similar to Sourcegraph / tree-sitter index. Helps agents send only **relevant code** into the context window instead of the entire codebase.
 
 **IMPORTANT:** Agents do NOT manually edit the JSON index files (prone to hallucination).
-Update the index using a tool/script:
-```bash
-# Makefile target using Go standard library AST parser
-make update-index
-# Or:
-go run tools/indexer/main.go -dir . -out .ai-agents/index/
-```
-Agents only call `make update-index` after each code change.
-The indexer uses Go's standard library (`go/ast`, `go/parser`, `go/token`) to parse the AST.
+Update the index using tooling from the **target repository** (if available).
+If no indexer exists, agents can use semantic/file search directly.
 
 ### Cost Control Strategy
 
@@ -555,7 +548,7 @@ configs/       -- Configuration files
 2. Design Go architecture
    |-- Draw system diagram (Mermaid: flowchart, sequence, class diagram)
    |-- Generate Go project layout:
-   |     cmd/api/
+  |     cmd/<entrypoint>/
    |     internal/domain/
    |     internal/service/
    |     internal/repository/
@@ -701,7 +694,7 @@ Go-specific security checklist:
    |-- Read symbols.json, imports.json
    |-- Identify current conventions
    |-- Find existing patterns & interfaces
-   +-- Check go.mod dependencies
+  +-- Check dependency manifests (for example go.mod) if present
 
 3. Generate code task by task
    |-- Create files per Go project layout
@@ -719,8 +712,8 @@ Go-specific security checklist:
    +-- Ensure backward compatibility
 
 4. Quality check
-   |-- go build ./...
-   |-- go vet ./...
+  |-- Run project build/validation commands
+  |-- Run project lint/static checks
    |-- Cross-check with architecture.md (prevent drift)
    +-- Run secure coding checklist
 ```
@@ -738,7 +731,7 @@ Go-specific security checklist:
 - [ ] No breaking backward compatibility
 - [ ] Go naming conventions (CamelCase, no I-prefix)
 - [ ] Secure coding checklist passed
-- [ ] go build / go vet passed
+- [ ] Project validation commands passed
 
 ---
 
@@ -874,8 +867,8 @@ Minimum coverage: 80% (entire project)
 4. Apply fix
    |-- Fix code with the smallest possible change
    |-- Write regression test (table-driven)
-   |-- go test ./... -race
-   |-- go vet ./...
+  |-- Run repository test command set (including race checks if available)
+  |-- Run repository lint/static validation
    +-- Verify fix does not break existing features
 
 5. Report & save knowledge
@@ -938,9 +931,9 @@ If loop count > max_loops (3):
 
 ```
 Layer 1: Static Analysis (automated)
-  |-- golangci-lint run (code quality, >100 linters)
-  |-- gosec ./... (security patterns)
-  +-- govulncheck ./... (dependency vulnerabilities)
+  |-- Run repository lint/static analysis tools
+  |-- Run repository security scanners
+  +-- Run dependency vulnerability checks
 
 Layer 2: AI Review (intelligent)
   |-- SOLID compliance
@@ -980,7 +973,7 @@ A05: Security Misconfiguration
   +-- Default configs, debug mode in prod, error messages leaking info
 
 A06: Vulnerable & Outdated Components
-  +-- govulncheck, go.mod audit
+  +-- dependency vulnerability scan + manifest/lockfile audit
 
 A07: Identification & Authentication Failures
   +-- JWT validation, session management, bcrypt cost
@@ -1045,7 +1038,7 @@ Pattern misuse check:
 ## Review: [File/Feature]
 ### Summary: [Pass / Pass with comments / Needs changes / Reject]
 
-### Static Analysis (golangci-lint / gosec / govulncheck)
+### Static Analysis (repository tools)
 - Findings: ...
 
 ### AI Review Findings
@@ -1064,7 +1057,7 @@ Pattern misuse check:
 - Goroutine leaks: ...
 - Race conditions: ...
 
-### Dependency Security (govulncheck)
+### Dependency Security
 - Vulnerabilities: ...
 - CVEs: ...
 
@@ -1076,7 +1069,7 @@ Pattern misuse check:
 
 ---
 
-## CI/CD Integration
+## Automation Integration
 
 ### Pipeline Flow
 
@@ -1087,17 +1080,16 @@ Agent generates code
 git commit (atomic, descriptive message)
   |
   v
-CI Pipeline:
-  |-- go build ./...
-  |-- go test ./... -race -cover
-  |-- golangci-lint run
-  |-- gosec ./...
-  |-- govulncheck ./...
-  +-- coverage check >= 80%
+Project automation pipeline:
+  |-- Build/validation commands
+  |-- Test/coverage commands
+  |-- Lint/static checks
+  |-- Security/dependency scans
+  +-- Coverage/quality gates
   |
   v
 Pass --> merge
-Fail --> Agent Fix --> re-run CI
+Fail --> Agent Fix --> re-run pipeline
 ```
 
 ---
@@ -1107,8 +1099,8 @@ Fail --> Agent Fix --> re-run CI
 ### Phase 1 -- Foundation
 - Create `.rules/` (go.md, architecture.md, design-patterns.md, security.md, testing.md)
 - Build Context Store (`.ai-agents/`)
-- Write indexer tool (using Go stdlib go/ast + go/parser) for Code Index
-- Setup static analysis (golangci-lint, gosec, govulncheck)
+- Define indexing/search strategy for context retrieval
+- Define lint/security/testing command set per target repository
 - Design prompt system for each agent
 
 ### Phase 2 -- Core Agents
@@ -1128,8 +1120,8 @@ Fail --> Agent Fix --> re-run CI
 - Integrate full flow: Plan --> Code --> Test --> Review --> Fix --> Review --> Done
 - Knowledge Memory system
 
-### Phase 5 -- CI/CD & Optimization
-- CI/CD integration (go test, golangci-lint, gosec, govulncheck)
+### Phase 5 -- Automation & Optimization
+- Automation integration using target repository command set
 - AST dependency graph for context optimization
 - Fine-tune prompts based on real-world feedback
 - Optimize token usage

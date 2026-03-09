@@ -15,7 +15,9 @@ coverage.out
 .vscode/
 *.swp
 *.swo
-.claude/
+# Claude settings (local only)
+.claude/settings.local.json
+# Keep .claude/commands/ tracked for team use
 
 # OS
 .DS_Store
@@ -25,9 +27,18 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+config.yaml
 
-# Generated index (regenerate with make update-index)
-.ai-agents/
+# AI agent runtime artifacts (plan, reviews, workflow state, index)
+.ai-agents/plan.md
+.ai-agents/architecture.md
+.ai-agents/tests-plan.md
+.ai-agents/tasks.md
+.ai-agents/workflow-state.json
+.ai-agents/reviews/
+.ai-agents/index/
+# Knowledge files are tracked (team learning)
+# .ai-agents/knowledge/ is NOT ignored
 
 # Vendor (if not committed)
 # vendor/
@@ -35,3 +46,4 @@ Thumbs.db
 # Temporary
 tmp/
 *.tmp
+*.backup

@@ -123,7 +123,7 @@ REQUIRED: All wiring in cmd/api/main.go
 REQUIRED: Interfaces for all external dependencies
 
 Example:
-  // cmd/api/main.go
+  // cmd/agent/main.go
   db := postgres.NewConnection(cfg.DB)
   userRepo := repository.NewPostgresUserRepo(db)
   userSvc := service.NewUserService(userRepo, logger)

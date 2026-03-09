@@ -1,9 +1,9 @@
 # Design Patterns for Go Backend
 
 ```
-Agent PHAI doc file nay truoc khi thiet ke va sinh code.
-Chon pattern phu hop voi van de, KHONG ep pattern khi khong can.
-Go uu tien DON GIAN. Neu pattern chi them 1 lop boc ma khong them gia tri --> bo qua.
+Agent MUST read this file before designing and generating code.
+Choose the right pattern for the problem. Do NOT force a pattern when not needed.
+Go prefers SIMPLICITY. If a pattern only adds a wrapper without adding value → skip.
 ```
 
 ---
@@ -12,7 +12,7 @@ Go uu tien DON GIAN. Neu pattern chi them 1 lop boc ma khong them gia tri --> bo
 
 ### Factory Method
 ```
-KHI NAO: Tao objects co nhieu variant (payment processor, notifier, storage)
+WHEN: Creating objects with many variants (payment processor, notifier, storage)
 GO IDIOM: Constructor function NewXxx() returning interface
 
 func NewStorage(storageType string) (Storage, error) {
@@ -26,12 +26,12 @@ func NewStorage(storageType string) (Storage, error) {
     }
 }
 
-LUU Y: Uu tien Functional Options hon Factory phuc tap
+NOTE: Prefer Functional Options over complex Factory
 ```
 
 ### Functional Options (Go-idiomatic Builder)
 ```
-KHI NAO: Object co nhieu optional config (server, client, service)
+WHEN: Object with many optional configs (server, client, service)
 GO IDIOM: Option functions
 
 type Option func(*Server)
@@ -58,7 +58,7 @@ srv := NewServer(WithPort(9090), WithTimeout(60*time.Second))
 
 ### Singleton
 ```
-KHI NAO: DB connection pool, logger, config (CHI khi that su can)
+WHEN: DB connection pool, logger, config (ONLY when truly needed)
 GO IDIOM: sync.Once
 
 var (
@@ -73,19 +73,19 @@ func GetDB() *DB {
     return instance
 }
 
-CANH BAO: Tranh lam dung. Uu tien Dependency Injection.
+WARNING: Avoid overuse. Prefer Dependency Injection.
 ```
 
 ---
 
 ## STRUCTURAL PATTERNS
 
-### Repository Pattern (MAC DINH cho data access)
+### Repository Pattern (DEFAULT for data access)
 ```
-KHI NAO: Moi entity can data access
+WHEN: Every entity needs data access
 GO IDIOM: "Accept interfaces, return structs" (Consumer-side interfaces)
 
-// service/user_service.go (CONSUMER dinh nghia interface)
+// service/user_service.go (CONSUMER defines interface)
 type UserRepository interface {
     FindByID(ctx context.Context, id string) (*domain.User, error)
     Save(ctx context.Context, user *domain.User) error
@@ -99,7 +99,7 @@ func NewUserService(repo UserRepository) *UserService {
     return &UserService{repo: repo}
 }
 
-// repository/user_postgres.go (PRODUCER tra ve struct)
+// repository/user_postgres.go (PRODUCER returns struct)
 type PostgresUserRepo struct {
     db *sql.DB
 }
@@ -112,13 +112,13 @@ func (r *PostgresUserRepo) FindByID(ctx context.Context, id string) (*domain.Use
     // implementation
 }
 
-REQUIRED: Interface tai CONSUMER (service/), KHONG o domain/
-REQUIRED: Interface nho (1-3 methods). Neu > 5 methods --> tach nho
+REQUIRED: Interface at CONSUMER (service/), NOT in domain/
+REQUIRED: Small interfaces (1-3 methods). If > 5 methods → split
 ```
 
 ### Adapter
 ```
-KHI NAO: Wrap external service/library (payment gateway, email provider)
+WHEN: Wrapping external service/library (payment gateway, email provider)
 GO IDIOM: Interface + wrapper struct
 
 type EmailSender interface {
@@ -137,15 +137,15 @@ func (a *sendgridAdapter) Send(ctx context.Context, to, subject, body string) er
     // wrap sendgrid-specific logic
 }
 
-MAC DINH SU DUNG, TRU KHI:
-  - Library da co interface tot (vd: AWS SDK v2)
-  - Chi co 1 implementation va khong can mock
-  - Wrapper chi forward 1:1 khong them logic
+DEFAULT USE, EXCEPT WHEN:
+  - Library already has a good interface (e.g., AWS SDK v2)
+  - Only 1 implementation and no need for mocking
+  - Wrapper just forwards 1:1 without adding logic
 ```
 
 ### Decorator / Middleware
 ```
-KHI NAO: Them behavior khong sua code goc (logging, auth, metrics, rate limit)
+WHEN: Adding behavior without modifying original code (logging, auth, metrics, rate limit)
 GO IDIOM: HTTP middleware chain, function wrapping
 
 // HTTP Middleware
@@ -172,8 +172,8 @@ func WithLogging(svc UserService, logger *slog.Logger) UserService {
 
 ### Facade
 ```
-KHI NAO: Gom nhieu service vao 1 entry point (order = inventory + payment + shipping)
-GO IDIOM: Struct aggregate dependencies
+WHEN: Aggregating multiple services into one entry point (order = inventory + payment + shipping)
+GO IDIOM: Struct aggregating dependencies
 
 type OrderFacade struct {
     inventory InventoryService
@@ -203,7 +203,7 @@ func (f *OrderFacade) PlaceOrder(ctx context.Context, order Order) error {
 
 ### Strategy
 ```
-KHI NAO: Thay doi algorithm luc runtime (pricing, sorting, compression, notification)
+WHEN: Changing algorithm at runtime (pricing, sorting, compression, notification)
 GO IDIOM: Interface + dependency injection
 
 type PricingStrategy interface {
@@ -224,8 +224,8 @@ func NewOrderService(pricing PricingStrategy) *OrderService {
 
 ### Observer / Event-Driven
 ```
-KHI NAO: Action trigger nhieu side effects (user created -> email + audit log)
-GO IDIOM: Channel-based hoac Event Bus
+WHEN: One action triggers many side effects (user created → send email + create audit log)
+GO IDIOM: Channel-based or Event Bus
 
 type EventType string
 
@@ -262,12 +262,12 @@ func (eb *EventBus) Publish(ctx context.Context, e Event) error {
     return nil
 }
 
-LUU Y: Microservices --> message broker (NATS, Kafka, RabbitMQ)
+NOTE: For microservices, use message broker (NATS, Kafka, RabbitMQ)
 ```
 
-### Circuit Breaker (MAC DINH cho external calls)
+### Circuit Breaker (DEFAULT for external calls)
 ```
-KHI NAO: Goi external service (API, payment, third-party)
+WHEN: Calling external services (API, payment, third-party)
 GO IDIOM: gobreaker library
 
 import "github.com/sony/gobreaker/v2"
@@ -286,7 +286,7 @@ resp, err := cb.Execute(func() (*http.Response, error) {
     return httpClient.Do(req)
 })
 
-REQUIRED: Moi external HTTP/gRPC call PHAI co circuit breaker
+REQUIRED: Every external HTTP/gRPC call MUST have a circuit breaker
 ```
 
 ---
@@ -295,7 +295,7 @@ REQUIRED: Moi external HTTP/gRPC call PHAI co circuit breaker
 
 ### Worker Pool
 ```
-KHI NAO: Xu ly nhieu task dong thoi co gioi han (batch, file upload)
+WHEN: Processing many tasks concurrently with limits (batch processing, file upload)
 GO IDIOM: Buffered channel + goroutines
 
 func WorkerPool(ctx context.Context, numWorkers int, jobs <-chan Job, results chan<- Result) {
@@ -319,12 +319,12 @@ func WorkerPool(ctx context.Context, numWorkers int, jobs <-chan Job, results ch
     close(results)
 }
 
-REQUIRED: Context hoac done channel de cancel
+REQUIRED: Context or done channel for cancellation
 ```
 
 ### Fan-Out / Fan-In
 ```
-KHI NAO: Parallel calls roi gom ket qua (parallel API calls, batch fetch)
+WHEN: Parallel calls then collecting results (parallel API calls, batch fetch)
 GO IDIOM: errgroup.Group
 
 import "golang.org/x/sync/errgroup"
@@ -351,7 +351,7 @@ if err := g.Wait(); err != nil {
 
 ### Pipeline
 ```
-KHI NAO: Data di qua nhieu buoc xu ly (ETL, data transformation)
+WHEN: Data flows through multiple processing steps (ETL, data transformation)
 GO IDIOM: Channel chaining
 
 func generate(ctx context.Context, data []int) <-chan int {
@@ -387,7 +387,7 @@ func transform(ctx context.Context, in <-chan int) <-chan string {
 
 ---
 
-## DEPENDENCY INJECTION (MAC DINH)
+## DEPENDENCY INJECTION (DEFAULT)
 
 ### Constructor Injection
 ```
@@ -401,9 +401,9 @@ func NewUserService(repo UserRepository, logger *slog.Logger, eventBus *EventBus
     }
 }
 
-REQUIRED: Moi dependency inject qua constructor
-FORBIDDEN: Global variables cho dependencies
-OPTIONAL: wire (Google) hoac fx (Uber) cho complex DI
+REQUIRED: Every dependency injected via constructor
+FORBIDDEN: Global variables for dependencies
+OPTIONAL: wire (Google) or fx (Uber) for complex DI
 ```
 
 ---
@@ -411,32 +411,32 @@ OPTIONAL: wire (Google) hoac fx (Uber) cho complex DI
 ## PATTERN SELECTION GUIDE
 
 ```
-Tinh huong                              --> Pattern
-Tao object co nhieu variant             --> Factory Method
-Config phuc tap, nhieu option           --> Functional Options
-Data access cho entity                  --> Repository (MAC DINH)
-Wrap external service                   --> Adapter (MAC DINH, tru khi over-engineering)
-Them logging/metrics/auth               --> Decorator / Middleware
-Goi external API/service                --> Circuit Breaker (MAC DINH)
-Thay doi algorithm luc runtime          --> Strategy
-Action trigger nhieu side effects       --> Observer / Event Bus
-Xu ly batch/parallel co limit           --> Worker Pool
-Parallel calls gom ket qua             --> Fan-Out / Fan-In (errgroup)
-Data qua nhieu buoc xu ly              --> Pipeline
-Inject dependencies                     --> Constructor Injection (MAC DINH)
+Situation                               --> Pattern
+Creating objects with many variants     --> Factory Method
+Complex config with many options        --> Functional Options
+Data access for an entity               --> Repository (DEFAULT)
+Wrapping external service               --> Adapter (DEFAULT, unless over-engineering)
+Adding logging/metrics/auth             --> Decorator / Middleware
+Calling external API/service            --> Circuit Breaker (DEFAULT)
+Changing algorithm at runtime           --> Strategy
+One action triggers many side effects   --> Observer / Event Bus
+Batch/parallel processing with limits   --> Worker Pool
+Parallel calls collecting results       --> Fan-Out / Fan-In (errgroup)
+Data through multiple processing steps  --> Pipeline
+Injecting dependencies                  --> Constructor Injection (DEFAULT)
 ```
 
 ---
 
-## ANTI-PATTERNS (KHONG DUOC LAM)
+## ANTI-PATTERNS (FORBIDDEN)
 
 ```
-FORBIDDEN: God struct (struct > 10 fields hoac > 7 methods)
-FORBIDDEN: Circular dependencies giua packages
-FORBIDDEN: Global mutable state (dung DI)
-FORBIDDEN: Interface pollution (interface khi chi co 1 impl va khong can mock)
-FORBIDDEN: Premature abstraction (pattern cho 1 use case)
-FORBIDDEN: Deep inheritance thinking (Go dung composition)
-FORBIDDEN: Empty interface{} khi co the dung concrete type
-FORBIDDEN: Over-wrapping (adapter quanh adapter)
+FORBIDDEN: God struct (struct > 10 fields or > 7 methods)
+FORBIDDEN: Circular dependencies between packages
+FORBIDDEN: Global mutable state (use DI instead)
+FORBIDDEN: Interface pollution (interface with only 1 impl and no need for mocking)
+FORBIDDEN: Premature abstraction (pattern for only 1 use case)
+FORBIDDEN: Deep inheritance thinking (Go uses composition)
+FORBIDDEN: Empty interface{} when a concrete type can be used
+FORBIDDEN: Over-wrapping (adapter around adapter)
 ```

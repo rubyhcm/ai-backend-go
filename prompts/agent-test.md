@@ -73,9 +73,9 @@ Overall: >= 80%
    - Error cases
    - Edge cases
    - Security-related cases
-5. Run: go test ./... -cover
+5. Run: target repository test command with coverage
 6. Check coverage >= target
-7. Run: go test -race (detect race conditions)
+7. Run: race/concurrency checks available in target repository
 8. If coverage < target -> write more tests
 9. Report results
 ```
@@ -89,7 +89,55 @@ Overall: >= 80%
 ## Update Workflow State
 
 After completing, update `.ai-agents/workflow-state.json`:
-- Set `state` to `"TESTING_DONE"`
+- Set `state` to `"REVIEWING"`
+
+## Report
+
+After completing, create a report at `reports/<unix_timestamp>_test_agent.md`:
+
+```markdown
+# Agent Report
+
+Agent Name: Test Agent
+Timestamp: [ISO-8601]
+
+## Input
+- Source files tested: [list]
+- Test plan: .ai-agents/tests-plan.md
+
+## Process
+- Generated mocks for [N] interfaces
+- Wrote [N] test functions with [N] total test cases
+- Ran tests with race detection
+- Checked coverage against targets
+
+## Output
+
+### Test Files Created
+| File | Tests | Cases | Coverage |
+|------|-------|-------|----------|
+| internal/service/user_service_test.go | 5 | 23 | 87% |
+
+### Coverage Report
+| Package | Target | Actual | Status |
+|---------|--------|--------|--------|
+| domain/ | 90% | 92% | PASS |
+| service/ | 85% | 87% | PASS |
+
+### Test Results
+- Total tests: [N]
+- Passed: [N]
+- Failed: [N]
+- Race conditions detected: [N]
+- Overall coverage: [X]%
+
+## Issues Found
+- [Any untestable code patterns found]
+- [Any coverage gaps that need attention]
+
+## Recommendations
+- [Suggestions for improving testability]
+```
 
 ## IMPORTANT
 
