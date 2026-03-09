@@ -21,4 +21,4 @@ Read and follow the agent prompt at `prompts/agent-fix.md`.
 8. Verify: `go build ./...`, `go test ./... -race`, `go vet ./...`
 9. Document in `.ai-agents/knowledge/bugs-history.md`.
 10. Create report: `reports/<unix_timestamp>_fix_agent.md`
-11. Update `.ai-agents/workflow-state.json` with state `"LINTING"`, increment `loop_count`.
+11. Update `.ai-agents/workflow-state.json` with state `"LINTING"` (do NOT increment `loop_count` -- Review agent handles it).

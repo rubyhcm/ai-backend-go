@@ -19,5 +19,7 @@ Read and follow the agent prompt at `prompts/agent-review.md`.
 5. Save review to `.ai-agents/reviews/review-<N>.md`.
 6. Create report: `reports/<unix_timestamp>_review_agent.md`
 7. Update `.ai-agents/workflow-state.json`:
-   - If APPROVED → state `"DONE"`
+   - If APPROVED → increment `completed_tasks`, reset `loop_count` to 0
+     - If all tasks done (`completed_tasks` == `total_tasks`) → state `"DONE"`
+     - Else → state `"CODING"` (proceed to next task)
    - If NEEDS CHANGES → state `"FIXING"`, increment `loop_count`

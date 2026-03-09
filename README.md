@@ -23,3 +23,15 @@ Repository này là bộ hướng dẫn để dùng với Claude Code theo mô h
 
 - Không cần `go.mod`, `Makefile`, hoặc binary runtime trong repo playbook này.
 - Nếu repo đích là Go project, các prompt/rules vẫn áp dụng bình thường.
+
+## Overview
+ai_tech/
+├── prompts/          (9 files) ← Bộ não của agents
+├── .claude/commands/ (9 files) ← Slash commands cho user
+├── .rules/           (5 files) ← Luật viết code
+├── .ai-agents/       (6 files) ← Workspace runtime
+├── reports/          (1 .gitkeep)
+├── README.md         ← Giới thiệu hệ thống
+├── HUONG_DAN_SU_DUNG.md ← Hướng dẫn cho người dùng
+├── .gitignore
+└── .golangci.yml
