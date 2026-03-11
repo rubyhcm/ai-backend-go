@@ -1,18 +1,19 @@
-# Bugs History
+# Bug History
 
-Records of past bugs and their fixes. Agent Fix writes here after each successful fix.
-
-## Format
-
-```
-### [Date] Bug: <short description>
-- **File:** path/to/file.go:line
-- **Root cause:** ...
-- **Fix:** ...
-- **Regression test:** path/to/test_file.go
-- **Prevention:** ...
-```
+> Auto-maintained by Agent Fix and Agent Fix Security.
+> Purpose: prevent recurrence of known bugs across tasks.
 
 ---
 
-<!-- Entries below -->
+<!-- Template for each entry:
+
+## [YYYY-MM-DD] Bug: [short title]
+
+**Task:** task-X — [task name]
+**File:** internal/path/to/file.go:[line]
+**Root Cause:** [What caused the bug and why]
+**Fix Applied:** [What was changed]
+**Regression Test:** [TestXxx in file_test.go]
+**Prevention:** [How to avoid this in future tasks]
+
+-->

@@ -1,7 +1,7 @@
 # Hướng Dẫn Sử Dụng Hệ Thống AI Agents
 
-**Phiên bản:** 2.0
-**Cập nhật:** 2026-03-09
+**Phiên bản:** 2.1
+**Cập nhật:** 2026-03-10
 
 ---
 
@@ -61,12 +61,7 @@ Nếu chưa có Claude Code, cài theo hướng dẫn tại: https://docs.anthro
 ### Bước 1: Mở terminal và vào thư mục dự án
 
 ```bash
-cd đường/dẫn/đến/thư/mục/dự/án
-```
-
-Ví dụ:
-```bash
-cd ~/agrios/ai_tech
+cd ~/agrios/centre-auth-service   # hoặc thư mục dự án của bạn
 ```
 
 ### Bước 2: Khởi động Claude Code
@@ -75,52 +70,42 @@ cd ~/agrios/ai_tech
 claude
 ```
 
-Màn hình sẽ hiện:
-```
-Welcome back!
-~/agrios/ai_tech
-```
-
 ### Bước 3: Chọn lệnh phù hợp
 
 ---
 
 ## Các Lệnh Có Sẵn
 
-### Lệnh 1: `/agent-full` - Chạy toàn bộ quy trình (DÙNG NHIỀU NHẤT)
+### `/agent-full` - Chạy toàn bộ quy trình (DÙNG NHIỀU NHẤT)
 
 Đây là lệnh chính. Hệ thống tự động làm **tất cả** từ đầu đến cuối.
-
-**Cách dùng:**
 
 ```
 /agent-full Tạo REST API quản lý người dùng với đăng ký, đăng nhập, xem thông tin
 ```
 
-Hoặc nếu bạn đã viết yêu cầu trong file:
-
+Hoặc từ file yêu cầu:
 ```
 /agent-full requirement.md
 ```
 
 **Hệ thống sẽ tự động:**
-1. Phân tích yêu cầu của bạn
-2. Lập kế hoạch chi tiết
-3. Chia thành các bước nhỏ
-4. Viết code + unit test (coverage >= 80%) cho từng bước
-5. Kiểm tra và tự sửa định dạng code
-6. **Quét bảo mật** (gosec + govulncheck + Semgrep + Snyk)
-7. **Tự động sửa lỗi bảo mật** nếu phát hiện lỗ hổng CRITICAL hoặc HIGH
-8. **Quét lại bảo mật** để xác nhận đã sửa xong
-9. Review code tổng thể
-10. Sửa lỗi nếu review không đạt
-11. Trả về code hoàn chỉnh đã qua kiểm tra
+1. Lập kế hoạch chi tiết *(dùng model Opus — mạnh nhất)*
+2. Chia thành các task nhỏ có thể thực hiện được
+3. Với từng task:
+   - Viết code + unit test (coverage >= 80%)
+   - Kiểm tra và sửa định dạng code
+   - Quét bảo mật (gosec + govulncheck + Semgrep + Snyk)
+   - **Tự động sửa** lỗ hổng CRITICAL/HIGH, quét lại để xác nhận
+   - Review code tổng thể
+   - Sửa lỗi nếu review không đạt
+4. Báo cáo hoàn thành khi tất cả task đều DONE
 
-**Trong khi chạy:** Bạn chỉ cần ngồi chờ. Hệ thống hiển thị tiến trình từng bước. Nếu cần quyết định quan trọng (ví dụ: lỗ hổng bảo mật trong thư viện bên ngoài), hệ thống sẽ dừng và hỏi bạn.
+**Trong khi chạy:** Bạn chỉ cần ngồi chờ. Hệ thống sẽ dừng và hỏi bạn chỉ khi gặp vấn đề không tự giải quyết được (ví dụ: lỗ hổng trong thư viện bên ngoài cần nâng cấp).
 
 ---
 
-### Lệnh 2: `/agent-plan` - Chỉ lập kế hoạch
+### `/agent-plan` - Chỉ lập kế hoạch
 
 Khi bạn chỉ muốn xem kế hoạch trước, chưa viết code.
 
@@ -128,30 +113,31 @@ Khi bạn chỉ muốn xem kế hoạch trước, chưa viết code.
 /agent-plan Tạo hệ thống thanh toán trực tuyến
 ```
 
-Hoặc từ file:
-```
-/agent-plan requirement.md
-```
+> **Model:** Opus (tự động dùng model mạnh nhất cho bước này)
 
-**Kết quả:** File kế hoạch tại `.ai-agents/plan.md`
+**Kết quả:** `.ai-agents/plan.md`, `.ai-agents/architecture.md`, `.ai-agents/tests-plan.md`
+
+**Tiếp theo:** `/agent-task`
 
 ---
 
-### Lệnh 3: `/agent-task` - Chia kế hoạch thành các bước nhỏ
+### `/agent-task` - Chia kế hoạch thành các task
 
-Sau khi đã có kế hoạch (đã chạy `/agent-plan`), chia thành các task có thể thực hiện được.
+Sau khi có kế hoạch, chia thành danh sách task có thứ tự và dependency rõ ràng.
 
 ```
 /agent-task
 ```
 
-**Kết quả:** File danh sách task tại `.ai-agents/tasks.md`
+**Kết quả:** `.ai-agents/tasks.md` — danh sách task với status `TODO`
+
+**Tiếp theo:** `/agent-code`
 
 ---
 
-### Lệnh 4: `/agent-code` - Viết code cho 1 task
+### `/agent-code` - Viết code cho task tiếp theo
 
-Viết code cho task tiếp theo trong danh sách.
+Tự động tìm và thực hiện task tiếp theo trong danh sách.
 
 ```
 /agent-code
@@ -162,288 +148,328 @@ Hoặc chỉ định task cụ thể:
 /agent-code task-3
 ```
 
+**Cách agent xác định task cần làm (theo thứ tự ưu tiên):**
+1. Task được chỉ định qua tham số (ví dụ `task-3`)
+2. `current_task` trong `workflow-state.json` nếu task đó vẫn là `TODO`
+3. Task đầu tiên có `Status: TODO` trong `tasks.md`
+
+**Tiếp theo:** `/agent-lint`
+
 ---
 
-### Lệnh 5: `/agent-lint` - Kiểm tra định dạng code
+### `/agent-lint` - Kiểm tra định dạng code
 
-Kiểm tra và tự động sửa định dạng code Go (gofmt, goimports, go vet, golangci-lint).
+Tự động sửa định dạng (gofmt, goimports, go vet, golangci-lint) trên các file vừa thay đổi.
 
 ```
 /agent-lint
 ```
 
+**Tiếp theo:** `/agent-security-fix`
+
 ---
 
-### Lệnh 6: `/agent-security` - Quét bảo mật
+### `/agent-security` - Quét bảo mật (chỉ xem báo cáo)
 
-Quét toàn diện các lỗ hổng bảo mật trong code. Sử dụng nhiều công cụ: gosec, govulncheck, Semgrep, Snyk.
+Quét toàn diện bằng gosec, govulncheck, Semgrep, Snyk. Chỉ tạo báo cáo, không tự sửa.
 
 ```
 /agent-security
 ```
 
-**Kết quả:** Báo cáo bảo mật tại `reports/<timestamp>_security_agent.md`
+**Tiếp theo:**
+- Nếu CLEAN: `/agent-review`
+- Nếu có CRITICAL/HIGH: `/agent-security-fix`
 
 ---
 
-### Lệnh 7: `/agent-security-fix` - Quét + Tự động sửa bảo mật ⭐ MỚI
+### `/agent-security-fix` - Quét + Tự động sửa bảo mật
 
-Quét bảo mật **và tự động sửa** tất cả lỗ hổng mức CRITICAL và HIGH. Không cần can thiệp thủ công.
+Quét bảo mật **và tự động sửa** tất cả lỗ hổng CRITICAL và HIGH.
 
 ```
 /agent-security-fix
 ```
 
-**Quy trình tự động:**
-1. Quét bảo mật (gosec + govulncheck + Semgrep + Snyk)
-2. Nếu phát hiện lỗ hổng CRITICAL hoặc HIGH → tự động sửa
-3. Quét lại để xác nhận đã sửa
-4. Lặp lại tối đa 3 lần nếu vẫn còn lỗi
-5. Nếu sau 3 lần vẫn không sửa được → báo cáo và hỏi bạn
+**Quy trình:**
+1. Quét (gosec + govulncheck + Semgrep + Snyk)
+2. Tự động sửa CRITICAL trước, rồi HIGH
+3. Quét lại để xác nhận
+4. Lặp tối đa 3 lần — nếu vẫn không xong thì dừng và hỏi bạn
 
-> **Lưu ý về lỗ hổng thư viện bên ngoài:** Nếu lỗ hổng nằm trong thư viện bên ngoài (ví dụ: `github.com/some-lib`), hệ thống sẽ **không tự nâng cấp** mà sẽ báo cáo và hỏi ý kiến bạn, vì nâng cấp có thể làm hỏng code hiện tại.
+> Lỗ hổng trong thư viện bên ngoài (govulncheck) **không tự nâng cấp** — sẽ hỏi bạn vì nâng cấp có thể gây lỗi khác.
+
+**Tiếp theo:** `/agent-review`
 
 ---
 
-### Lệnh 8: `/agent-review` - Review code
+### `/agent-review` - Review code
 
-Kiểm tra tổng thể: chất lượng, kiến trúc, logic, độ phủ test.
+Kiểm tra tổng thể: kiến trúc, SOLID, logic nghiệp vụ, chất lượng test, coverage.
 
 ```
 /agent-review
 ```
 
-> **Lưu ý:** Nếu coverage (độ phủ test) dưới 80%, review sẽ không đạt và yêu cầu viết thêm test.
+**Coverage là bắt buộc:** Nếu dưới 80%, review tự động FAIL dù code có tốt đến đâu.
+
+**Sau khi review:**
+- **APPROVED:** Task được đánh dấu `DONE`, `current_task` tự động chuyển sang task tiếp theo
+- **NEEDS CHANGES:** Chạy `/agent-fix` rồi `/agent-lint` để sửa và kiểm tra lại
 
 ---
 
-### Lệnh 9: `/agent-fix` - Sửa lỗi
+### `/agent-fix` - Sửa lỗi
 
-Khi gặp lỗi, đưa thông báo lỗi cho hệ thống tự sửa.
+Phân tích và sửa lỗi dựa trên thông báo lỗi hoặc kết quả review.
 
 ```
 /agent-fix "Error: nil pointer dereference at internal/service/user.go:42"
 ```
 
-Hoặc nếu đã có review:
+Hoặc để agent tự đọc báo cáo review:
 ```
 /agent-fix
 ```
-(Hệ thống tự đọc báo cáo review để biết cần sửa gì)
+
+**Tiếp theo:** `/agent-lint` → `/agent-security-fix` → `/agent-review`
 
 ---
 
-### Lệnh 10: `/agent-test` - Viết thêm test
+### `/agent-test` - Viết thêm test (độc lập)
 
-Tạo thêm test cho code đã có (dùng độc lập, không thuộc pipeline chính).
+Tạo thêm test cho code đã có. **Không thuộc pipeline chính** — dùng khi muốn bổ sung test riêng.
 
 ```
 /agent-test
 ```
 
+**Tiếp theo:** `/agent-review`
+
 ---
 
-## Ví Dụ Sử Dụng Thực Tế
+## Theo Dõi Tiến Độ
 
-### Ví dụ 1: Tạo API từ đầu
+### Xem danh sách task và trạng thái
 
+Mở file `.ai-agents/tasks.md`. Mỗi task có trường `**Status:**`:
+
+| Status | Ý nghĩa |
+|--------|---------|
+| `TODO` | Chưa bắt đầu |
+| `IN_PROGRESS` | Đang thực hiện hoặc đang sửa lỗi |
+| `DONE` | Review đã APPROVED ✅ |
+
+Ví dụ:
 ```
-claude                          # Mở Claude Code
-/agent-full Tạo REST API quản lý sản phẩm với CRUD, phân trang, tìm kiếm
-```
+## Task 3: HMAC Utility Package
+**Status:** DONE
 
-Đợi hệ thống chạy xong. Code sẽ nằm trong các thư mục `cmd/`, `internal/`, `pkg/`.
+## Task 4: Repository Interface
+**Status:** IN_PROGRESS
 
-### Ví dụ 2: Tạo từ file yêu cầu
-
-Tạo file `yeu-cau.md` với nội dung:
-
-```markdown
-# Yêu cầu: Hệ thống quản lý đơn hàng
-
-## Chức năng
-- Tạo đơn hàng mới
-- Xem danh sách đơn hàng
-- Cập nhật trạng thái đơn hàng
-- Hủy đơn hàng
-
-## Yêu cầu kỹ thuật
-- REST API
-- PostgreSQL
-- JWT authentication
+## Task 5: Repository Implementation
+**Status:** TODO
 ```
 
-Sau đó:
-```
-claude
-/agent-full yeu-cau.md
+### Xem tổng quan nhanh
+
+Mở file `.ai-agents/workflow-state.json`:
+
+```json
+{
+  "state": "CODING",
+  "current_task": "task-4",
+  "total_tasks": 9,
+  "completed_tasks": 3
+}
 ```
 
-### Ví dụ 3: Chỉ muốn kiểm tra bảo mật và tự sửa
+Đọc ngay: đang ở task-4, đã xong 3/9 task, state đang là CODING.
+
+### Các trạng thái (state) có thể gặp
+
+| State | Ý nghĩa |
+|-------|---------|
+| `PLANNING` | Đang lập kế hoạch |
+| `TASKING` | Đang chia task |
+| `CODING` | Đang viết code |
+| `LINTING` | Đang kiểm tra định dạng |
+| `SECURITY_SCANNING` | Đang quét bảo mật |
+| `SECURITY_FIXING` | Đang tự sửa lỗ hổng bảo mật |
+| `REVIEWING` | Đang review code |
+| `FIXING` | Đang sửa lỗi từ review |
+| `DONE` | Tất cả task hoàn thành ✅ |
+| `ESCALATED` | Cần can thiệp thủ công |
+
+---
+
+## Quy Trình Tổng Thể
 
 ```
-claude
+/agent-plan  (Opus)
+    ↓
+/agent-task  (Sonnet)
+    ↓
+┌─── /agent-code ──────────────────────────────────┐
+│       ↓                                          │
+│   /agent-lint                                    │
+│       ↓                                          │
+│   /agent-security-fix ←──────────────────┐      │
+│       ↓ CLEAN                            │      │
+│   /agent-review      NEEDS CHANGES       │      │
+│       ↓ ──────────→ /agent-fix ──→ lint ─┘      │
+│       ↓ APPROVED                                 │
+│   current_task → task tiếp theo (TODO)           │
+└──────────────────────────────────────────────────┘
+    ↓ (tất cả task DONE)
+  DONE ✅
+```
+
+**Model sử dụng:**
+- `/agent-plan` → `claude-opus-4-6` (kiến trúc, thiết kế phức tạp)
+- Tất cả agent còn lại → `claude-sonnet-4-6` (nhanh, hiệu quả)
+
+Switch model khi cần:
+```
+/model claude-opus-4-6    # trước khi chạy /agent-plan
+/model claude-sonnet-4-6  # trước khi chạy các agent còn lại
+```
+
+---
+
+## Ví Dụ Thực Tế
+
+### Ví dụ 1: Tạo tính năng từ đầu (tự động hoàn toàn)
+
+```
+/model claude-opus-4-6
+/agent-full Tạo gRPC API xác thực partner service với HMAC signature
+```
+
+Hệ thống tự chạy từ đầu đến cuối. Khi xong, toàn bộ task sẽ là `DONE`.
+
+### Ví dụ 2: Chạy từng bước (kiểm soát thủ công)
+
+```
+/model claude-opus-4-6
+/agent-plan requirement.md        # Lập kế hoạch
+
+/model claude-sonnet-4-6
+/agent-task                        # Chia task
+/agent-code                        # Viết code task đầu tiên
+/agent-lint                        # Kiểm tra định dạng
+/agent-security-fix                # Quét và sửa bảo mật
+/agent-review                      # Review → APPROVED → tự chuyển task tiếp theo
+/agent-code                        # Viết code task tiếp theo
+# ... lặp lại cho đến khi DONE
+```
+
+### Ví dụ 3: Tiếp tục sau khi bị gián đoạn
+
+```
+# Xem đang ở đâu
+cat .ai-agents/workflow-state.json
+
+# Ví dụ: state = "LINTING", current_task = "task-5"
+/agent-lint         # Tiếp tục từ bước lint
 /agent-security-fix
-```
-
-Hệ thống quét toàn bộ code, tự sửa lỗ hổng, và báo cáo kết quả.
-
-### Ví dụ 4: Chỉ muốn review code đã viết
-
-```
-claude
 /agent-review
 ```
 
-### Ví dụ 5: Gặp lỗi cần sửa
+### Ví dụ 4: Sửa lỗi từ review
 
 ```
-claude
-/agent-fix "server không khởi động được, lỗi: port 8080 already in use"
+# Review trả về NEEDS CHANGES
+/agent-fix                         # Tự đọc review và sửa
+/agent-lint
+/agent-security-fix
+/agent-review                      # Chạy lại review
 ```
-
----
-
-## Quy Trình Xử Lý Bảo Mật
-
-Hệ thống có **2 vòng lặp tự động sửa lỗi** độc lập:
-
-```
-Viết code
-    ↓
-Kiểm tra lint
-    ↓
-Quét bảo mật ──→ Phát hiện CRITICAL/HIGH? ──→ Tự động sửa ──→ Quét lại (tối đa 3 lần)
-    ↓ (không có lỗi nghiêm trọng)
-Review code ──→ Không đạt? ──→ Sửa lỗi ──→ Lint lại (tối đa 3 lần)
-    ↓ (đạt)
-XONG
-```
-
-**Các công cụ bảo mật sử dụng:**
-
-| Công cụ | Kiểm tra gì |
-|---------|-------------|
-| **gosec** | Lỗi bảo mật Go phổ biến (hardcode secret, SQL injection, ...) |
-| **govulncheck** | Lỗ hổng đã biết trong thư viện (CVE database) |
-| **Semgrep** | Phân tích code tĩnh theo OWASP Top 10 |
-| **Snyk** | Lỗ hổng dependency + lỗi code nâng cao |
-
-**Mức độ nghiêm trọng:**
-
-| Mức | Ý nghĩa | Hành động |
-|-----|---------|-----------|
-| **CRITICAL** | Lỗ hổng có thể bị tấn công ngay | Bắt buộc sửa trước khi tiếp tục |
-| **HIGH** | Nguy cơ cao, thiếu kiểm soát bảo mật | Bắt buộc sửa trước khi tiếp tục |
-| **MEDIUM** | Thực hành bảo mật yếu | Nên sửa |
-| **LOW** | Cải thiện nhỏ | Tùy chọn |
 
 ---
 
 ## Cấu Trúc Thư Mục
 
-Sau khi hệ thống chạy xong, bạn sẽ thấy:
-
 ```
 du-an-cua-ban/
-├── cmd/api/main.go          # File khởi động ứng dụng
+├── cmd/api/main.go
 ├── internal/
-│   ├── domain/              # Các đối tượng chính (User, Product,...)
-│   ├── usecase/             # Logic xử lý nghiệp vụ
-│   ├── repository/          # Truy cập database
-│   └── handler/             # Xử lý HTTP/gRPC request
-├── reports/                 # Báo cáo của từng bước
-│   ├── 1710000001_plan_agent.md
-│   ├── 1710000002_task_agent.md
-│   ├── 1710000003_code_agent.md
-│   ├── 1710000004_lint_agent.md
-│   ├── 1710000005_security_agent.md
-│   ├── 1710000006_fix_security_agent.md  # (nếu có lỗ hổng được sửa)
-│   └── 1710000007_review_agent.md
-└── .ai-agents/              # Dữ liệu nội bộ của hệ thống
-    ├── plan.md              # Kế hoạch
-    ├── tasks.md             # Danh sách task
-    └── reviews/             # Kết quả review
+│   ├── domain/              # Entities, errors, value objects
+│   ├── usecase/             # Business logic
+│   ├── repository/          # Repository interfaces + implementations
+│   └── grpc/                # gRPC handlers
+├── reports/                 # Báo cáo tự động của từng bước
+│   ├── ..._plan_agent.md
+│   ├── ..._task_agent.md
+│   ├── ..._code_agent.md
+│   ├── ..._lint_agent.md
+│   ├── ..._security_agent.md
+│   ├── ..._fix_security_agent.md   # chỉ có khi đã sửa lỗ hổng
+│   ├── ..._review_agent.md
+│   └── ..._fix_agent.md            # chỉ có khi review NEEDS CHANGES
+└── .ai-agents/
+    ├── plan.md
+    ├── architecture.md
+    ├── tests-plan.md
+    ├── tasks.md             # ← theo dõi status từng task ở đây
+    ├── workflow-state.json  # ← theo dõi tiến độ tổng thể ở đây
+    └── reviews/
+        └── review-1.md, review-2.md, ...
 ```
-
-**Thư mục `reports/`** là nơi bạn có thể đọc báo cáo chi tiết của từng bước, bao gồm cả báo cáo bảo mật.
 
 ---
 
 ## Câu Hỏi Thường Gặp
 
+### Làm sao biết task nào đã xong, task nào chưa?
+
+Có 2 cách:
+
+**Cách 1 — Chi tiết từng task:** Đọc `.ai-agents/tasks.md`, xem trường `**Status:**` của mỗi task (`TODO` / `IN_PROGRESS` / `DONE`).
+
+**Cách 2 — Tổng quan nhanh:** Đọc `.ai-agents/workflow-state.json`, xem `completed_tasks` / `total_tasks` và `current_task`.
+
+### Agent biết làm task nào tiếp theo bằng cách nào?
+
+Khi chạy `/agent-code`, agent tự xác định theo thứ tự ưu tiên:
+1. Task được chỉ định thủ công (ví dụ `/agent-code task-5`)
+2. `current_task` trong `workflow-state.json` (nếu task đó vẫn là `TODO`)
+3. Task đầu tiên có `Status: TODO` trong `tasks.md`
+
+Khi một task APPROVED, agent-review **tự động cập nhật** `current_task` sang task `TODO` tiếp theo — bạn chỉ cần gõ `/agent-code` là chạy đúng task.
+
 ### Hệ thống bị dừng giữa chừng thì sao?
 
-Chạy lại lệnh trước đó. Hệ thống sẽ đọc trạng thái từ file `.ai-agents/workflow-state.json` và tiếp tục từ chỗ dang dở.
+Đọc `workflow-state.json` để xem `state` và `current_task` đang ở đâu, rồi chạy lại đúng agent tương ứng:
 
-### Làm sao biết code đã xong chưa?
-
-Hệ thống sẽ thông báo "DONE". Bạn cũng có thể kiểm tra file `.ai-agents/workflow-state.json` — nếu `state` là `"DONE"` thì đã xong.
-
-### Muốn sửa yêu cầu giữa chừng?
-
-Dừng lại (Ctrl+C), sửa yêu cầu, rồi chạy lại `/agent-full` với yêu cầu mới.
+| state | Chạy lại lệnh |
+|-------|---------------|
+| `CODING` | `/agent-code` |
+| `LINTING` | `/agent-lint` |
+| `SECURITY_SCANNING` | `/agent-security-fix` |
+| `REVIEWING` | `/agent-review` |
+| `FIXING` | `/agent-fix` |
 
 ### Hệ thống phát hiện lỗ hổng bảo mật thì sao?
 
-Hệ thống **tự động sửa** lỗ hổng CRITICAL và HIGH mà không cần bạn can thiệp. Sau khi sửa, nó quét lại để xác nhận. Bạn có thể xem báo cáo chi tiết tại `reports/*_fix_security_agent.md`.
+Hệ thống **tự động sửa** lỗ hổng CRITICAL và HIGH, quét lại để xác nhận, lặp tối đa 3 lần. Bạn không cần làm gì. Chi tiết xem tại `reports/*_fix_security_agent.md`.
 
-Nếu lỗ hổng nằm trong thư viện bên ngoài (không phải code của bạn), hệ thống sẽ dừng và hỏi bạn vì nâng cấp thư viện có thể gây ra vấn đề khác.
-
-### Hệ thống báo "security_fix_count exceeded"?
-
-Nghĩa là hệ thống đã thử sửa lỗ hổng bảo mật 3 lần nhưng vẫn không thành công. Lúc này:
-1. Đọc báo cáo tại `reports/*_security_agent.md` và `reports/*_fix_security_agent.md`
-2. Liên hệ người phụ trách kỹ thuật để xem xét
+Trường hợp **dừng và hỏi bạn:**
+- Lỗ hổng nằm trong thư viện bên ngoài (cần nâng cấp — bạn phải quyết định)
+- Sau 3 lần tự sửa vẫn thất bại
 
 ### Coverage dưới 80% thì sao?
 
-Review sẽ không đạt. Hệ thống sẽ tự động yêu cầu viết thêm test. Nếu sau 3 lần vẫn không đạt coverage, sẽ báo cáo và dừng lại.
+Review tự động FAIL. Hệ thống sẽ yêu cầu viết thêm test và chạy lại. Sau 3 lần vẫn không đạt thì dừng và báo bạn.
 
-### Code bị lỗi nhiều quá, review không qua?
+### Muốn xem chi tiết lỗi review?
 
-Hệ thống tự động sửa tối đa 3 lần. Nếu vẫn không qua, sẽ dừng lại và báo cho bạn biết vấn đề. Lúc này bạn có thể:
-- Đọc báo cáo review trong `reports/`
-- Chạy `/agent-fix "mô tả vấn đề"` để sửa thủ công
+Đọc file `.ai-agents/reviews/review-<N>.md` — có đầy đủ: severity, file:line, mô tả vấn đề, và gợi ý sửa cụ thể.
 
-### Muốn chạy từng bước thay vì chạy hết?
+### Hệ thống có xóa code cũ không?
 
-Có thể! Chạy theo thứ tự:
-1. `/agent-plan "yêu cầu"`
-2. `/agent-task`
-3. `/agent-code`
-4. `/agent-lint`
-5. `/agent-security-fix` (hoặc `/agent-security` nếu chỉ muốn xem báo cáo)
-6. `/agent-review`
-
-### File báo cáo ở đâu?
-
-Trong thư mục `reports/`. Tên file có dạng `<số>_<tên_agent>.md`. Mở bằng bất kỳ trình đọc text nào.
-
-### Hệ thống có xóa code cũ của tôi không?
-
-**Không.** Hệ thống luôn tạo branch mới (nhánh Git) trước khi viết code. Code cũ của bạn vẫn nguyên vẹn trên branch `main`. Chỉ khi bạn tự quyết định merge (gộp) thì code mới được thêm vào.
-
-### Tôi không biết Git là gì, có sao không?
-
-Không sao. Hệ thống tự động xử lý Git. Bạn chỉ cần biết:
-- Code mới nằm trên "branch" riêng (như bản sao)
-- Code cũ vẫn an toàn trên branch "main"
-- Khi hài lòng với code mới, nhờ người biết kỹ thuật giúp merge
-
----
-
-## Mẹo Sử Dụng
-
-1. **Viết yêu cầu càng chi tiết càng tốt.** "Tạo API" sẽ cho kết quả chung chung. "Tạo REST API quản lý người dùng với đăng ký bằng email, đăng nhập bằng JWT, phân quyền admin/user" sẽ cho kết quả tốt hơn.
-
-2. **Dùng file .md cho yêu cầu phức tạp.** Khi yêu cầu dài, viết vào file rồi dùng `/agent-full ten-file.md`.
-
-3. **Đọc báo cáo bảo mật.** File `reports/*_security_agent.md` và `reports/*_fix_security_agent.md` cho bạn biết lỗ hổng gì đã được phát hiện và sửa như thế nào.
-
-4. **Dùng `/agent-security-fix` thường xuyên.** Ngay cả khi không phát triển tính năng mới, chạy lệnh này định kỳ để đảm bảo code luôn an toàn.
-
-5. **Chạy `/agent-review` trước khi giao code.** Ngay cả khi tự viết code, bạn có thể dùng agent review để kiểm tra tổng thể.
+**Không.** Mỗi task tạo một branch riêng (`feature/task-X-ten-task`). Code cũ trên `main` không bị ảnh hưởng. Bạn quyết định merge khi nào thì merge.
 
 ---
 
@@ -451,21 +477,22 @@ Không sao. Hệ thống tự động xử lý Git. Bạn chỉ cần biết:
 
 | Vấn đề | Cách xử lý |
 |--------|-----------|
-| Claude Code không mở | Kiểm tra đã cài chưa: gõ `claude` trong terminal |
-| Không thấy lệnh `/agent-*` | Đảm bảo đang ở đúng thư mục dự án (có file `.claude/commands/`) |
-| Hệ thống báo "go: command not found" | Cài Go: https://go.dev/dl/ |
-| Hệ thống báo "golangci-lint not found" | Cài golangci-lint: https://golangci-lint.run/welcome/install/ |
-| Hệ thống báo "gosec not found" | Chạy: `go install github.com/securego/gosec/v2/cmd/gosec@latest` |
-| Hệ thống báo "govulncheck not found" | Chạy: `go install golang.org/x/vuln/cmd/govulncheck@latest` |
-| Hệ thống dừng và không phản hồi | Ấn Ctrl+C để dừng, rồi chạy lại lệnh |
-| Hệ thống hỏi câu hỏi bạn không hiểu | Trả lời "yes" hoặc "có" để tiếp tục, hoặc "no" để dừng |
-| Báo cáo bảo mật có "ESCALATED" | Lỗ hổng phức tạp, cần người kỹ thuật xem xét |
+| Claude Code không mở | Gõ `claude` trong terminal để kiểm tra |
+| Không thấy lệnh `/agent-*` | Đảm bảo đang ở đúng thư mục dự án (có `.claude/commands/`) |
+| `go: command not found` | Cài Go: https://go.dev/dl/ |
+| `golangci-lint not found` | `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest` |
+| `gosec not found` | `go install github.com/securego/gosec/v2/cmd/gosec@latest` |
+| `govulncheck not found` | `go install golang.org/x/vuln/cmd/govulncheck@latest` |
+| Hệ thống không phản hồi | Ctrl+C để dừng, đọc `workflow-state.json`, chạy lại đúng agent |
+| State = `ESCALATED` | Đọc `reports/` và liên hệ người phụ trách kỹ thuật |
+| `security_fix_count exceeded` | Lỗ hổng phức tạp, cần xem xét thủ công `reports/*_security_agent.md` |
+| `loop_count exceeded` | Code có vấn đề lớn, đọc `.ai-agents/reviews/` để hiểu rõ |
 
 ---
 
 ## Liên Hệ Hỗ Trợ
 
-Nếu gặp vấn đề không tự giải quyết được:
-- Đọc báo cáo trong `reports/` để hiểu hệ thống đã làm gì
-- Đọc file `.ai-agents/workflow-state.json` để xem trạng thái hiện tại
-- Liên hệ người phụ trách kỹ thuật và cung cấp nội dung thư mục `reports/`
+Khi cần nhờ người kỹ thuật hỗ trợ, cung cấp các thông tin sau:
+- Nội dung file `.ai-agents/workflow-state.json`
+- Các file trong thư mục `reports/`
+- Các file trong thư mục `.ai-agents/reviews/`

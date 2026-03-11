@@ -100,19 +100,34 @@ FORBIDDEN: Function with > 5 parameters (use options struct)
 ## Logging
 
 ```
-REQUIRED: Structured logging (slog or zerolog)
+REQUIRED: Structured logging (zap)
 REQUIRED: Log levels: Debug, Info, Warn, Error
 REQUIRED: Include context fields: request_id, user_id, trace_id
+REQUIRED: Every log statement MUST include a "component" field as prefix
+          so logs can be filtered/searched by component name.
+          Format: logger.Info("message", zap.String("component", "PartnerAuth"), ...)
+          Or use a child logger: log = logger.With(zap.String("component", "PartnerAuth"))
+REQUIRED: Use the child logger pattern — create component logger once in constructor:
+          p.log = logger.With(zap.String("component", "ServiceName"))
+          then use p.log.Info/Warn/Error throughout
 FORBIDDEN: fmt.Println for logging
 FORBIDDEN: Log sensitive data (passwords, tokens, PII)
+FORBIDDEN: Bare log statements without component field
 ```
 
 ## Configuration
 
 ```
-REQUIRED: Environment variables for secrets
-REQUIRED: Config struct with validation
+REQUIRED: All configurable values MUST be defined in config/config.yaml (or config.go struct)
+          and loaded via Viper — never hardcoded in business logic.
+REQUIRED: This includes: timeouts, limits, thresholds, feature flags, retry counts,
+          buffer sizes, rate limits, max connections, token expiry durations, etc.
+REQUIRED: Config struct fields must have mapstructure tags for Viper binding
 REQUIRED: Separate configs per environment (dev, staging, prod)
+REQUIRED: Environment variables for secrets (override config.yaml values)
 FORBIDDEN: Hardcoded secrets, API keys, passwords
-FORBIDDEN: Hardcoded URLs or ports
+FORBIDDEN: Hardcoded URLs, ports, or connection strings
+FORBIDDEN: Magic numbers — extract to named config fields
+          BAD:  time.Sleep(5 * time.Second)
+          GOOD: time.Sleep(cfg.Auth.TokenRefreshInterval)
 ```

@@ -1,5 +1,8 @@
 # Agent Plan
 
+> **Model:** `claude-opus-4-6`
+> Run with: `claude --model claude-opus-4-6` or switch via `/model claude-opus-4-6`
+
 Create a development plan for the given requirement.
 
 ## Input
@@ -19,3 +22,12 @@ Read and follow the agent prompt at `prompts/agent-plan.md`.
    - `.ai-agents/tests-plan.md` - Test plan with coverage targets
 6. Create report: `reports/<unix_timestamp>_plan_agent.md`
 7. Update `.ai-agents/workflow-state.json` with state `"TASKING"`.
+
+## Next Steps
+
+```
+✅ Plan created → Run Agent Task to break plan into implementable tasks:
+
+  /model claude-sonnet-4-6
+  /agent-task
+```

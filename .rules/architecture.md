@@ -98,20 +98,103 @@ project-root/
 +-- .golangci.yml
 ```
 
+## gRPC Workflow (MANDATORY for all gRPC features)
+
+Every new gRPC service or method MUST follow this exact order:
+
+```
+Step 1 — PROTO DEFINITION
+  File: proto/<module>/<service>.proto
+  - Define service, rpc methods, request/response messages
+  - Use google.protobuf.Timestamp for time fields
+  - Add field validation comments (required, min, max)
+  - Follow proto3 syntax, package naming: <project>.<module>.v1
+
+Step 2 — CODE GENERATION
+  Run after every proto change:
+    buf generate           # preferred (uses buf.gen.yaml)
+    OR
+    make proto             # if Makefile target exists
+    OR
+    protoc --go_out=. --go-grpc_out=. proto/<module>/<service>.proto
+
+  Generated files land in: internal/grpc/pb/<module>/
+
+  NEVER edit generated files manually.
+  Re-run generation whenever .proto changes.
+
+Step 3 — HANDLER IMPLEMENTATION
+  File: internal/grpc/<service>_server.go
+  - Embed pb.Unimplemented<Service>Server for forward compatibility
+  - Constructor: New<Service>Server(usecase, logger) *<Service>Server
+  - Each RPC method: validate input → call usecase → map to proto response
+  - Map domain errors to gRPC status codes (see error mapping below)
+  - Use component-scoped logger: logger.With(zap.String("component", "<Service>"))
+
+Step 4 — SERVICE REGISTRATION
+  File: internal/grpc/server.go (or internal/api/init.go)
+  - pb.Register<Service>Server(grpcServer, handler)
+  - Register BEFORE server.Serve()
+  - Add to DI wiring in internal/api/init.go if needed
+```
+
+### gRPC Project Structure
+
+```
+proto/
+  <module>/
+    <service>.proto          ← Step 1: define here
+
+internal/grpc/
+  pb/
+    <module>/
+      <service>.pb.go        ← Step 2: generated, DO NOT edit
+      <service>_grpc.pb.go   ← Step 2: generated, DO NOT edit
+  <service>_server.go        ← Step 3: implement here
+  <service>_server_test.go   ← Step 3: tests
+  server.go                  ← Step 4: register here
+```
+
+### gRPC Error Mapping
+
+```go
+// Domain error → gRPC status code
+domain.ErrNotFound         → codes.NotFound
+domain.ErrAlreadyExists    → codes.AlreadyExists
+domain.ErrPermissionDenied → codes.PermissionDenied
+domain.ErrUnauthenticated  → codes.Unauthenticated
+domain.ErrInvalidInput     → codes.InvalidArgument
+domain.ErrTimeout          → codes.DeadlineExceeded
+domain.ErrInternal         → codes.Internal
+
+// Use status.Errorf — never return raw errors from gRPC handlers
+return nil, status.Errorf(codes.NotFound, "resource not found")
+```
+
+### gRPC Handler Rules
+
+```
+REQUIRED: Embed pb.Unimplemented<Service>Server in handler struct
+REQUIRED: Validate all input fields before calling usecase
+REQUIRED: Map ALL domain errors to appropriate gRPC status codes
+REQUIRED: Never leak internal error details in gRPC status messages
+REQUIRED: Use context deadline from incoming ctx — do NOT create new timeout
+REQUIRED: Log each RPC call with: method, duration, status code, partner/user id
+FORBIDDEN: Business logic inside gRPC handler (delegate to usecase)
+FORBIDDEN: Direct repository access from handler
+FORBIDDEN: Returning raw Go errors — always wrap with status.Errorf
+FORBIDDEN: Editing generated pb/*.go files
+```
+
 ## API Design Rules
 
 ```
-REQUIRED: RESTful naming: /api/v1/users, /api/v1/users/{id}
-REQUIRED: Consistent response format:
-  {
-    "data": ...,
-    "meta": { "page": 1, "total": 100 },
-    "error": { "code": "NOT_FOUND", "message": "..." }
-  }
-REQUIRED: Versioning in URL path: /api/v1/, /api/v2/
-REQUIRED: Pagination for list endpoints (cursor or offset)
-REQUIRED: Request validation at handler layer
-FORBIDDEN: Business logic in handler (delegate to service)
+REQUIRED: gRPC-first — all business APIs use gRPC + protobuf
+REQUIRED: HTTP only for health checks (/healthz) and metrics (/metrics)
+REQUIRED: Proto versioning: package <project>.<module>.v1
+REQUIRED: Pagination for list RPCs (use page_token + page_size pattern)
+REQUIRED: Request validation at handler layer before calling usecase
+FORBIDDEN: Business logic in handler (delegate to usecase)
 FORBIDDEN: Database queries in handler
 ```
 

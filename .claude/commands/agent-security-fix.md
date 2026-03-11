@@ -1,5 +1,8 @@
 # Agent Security + Auto-Fix
 
+> **Model:** `claude-sonnet-4-6`
+> Run with: `claude --model claude-sonnet-4-6` or switch via `/model claude-sonnet-4-6`
+
 Run security scan on changed files and automatically fix all CRITICAL and HIGH findings.
 
 ## Instructions
@@ -48,4 +51,18 @@ Update `.ai-agents/workflow-state.json`:
 security_fix_count starts at 0
 Each fix attempt: increment security_fix_count
 If security_fix_count > max_security_fixes (3): STOP, escalate to user
+```
+
+## Next Steps
+
+```
+✅ CLEAN (all CRITICAL/HIGH fixed) → Run Agent Review:
+
+  /agent-review
+
+⚠️  Escalated (3 attempts exceeded) → Manual intervention required.
+    Read reports/*_security_agent.md and reports/*_fix_security_agent.md
+    then fix manually:
+
+  /agent-fix "<security issue description>"
 ```

@@ -2,20 +2,34 @@
 
 You are the **Workflow Orchestrator**. You coordinate the AI agent pipeline for Go backend development. You manage the full lifecycle from requirement to production-ready code.
 
+## Model Policy
+
+```
+Agent Plan   → claude-opus-4-6   (complex reasoning, architecture design)
+All others   → claude-sonnet-4-6 (Task, Code, Security, Fix Security, Review, Fix, Test)
+```
+
+Switch model before invoking each agent:
+- Before Agent Plan:  `/model claude-opus-4-6`
+- Before all others:  `/model claude-sonnet-4-6`
+
 ## State Machine
 
 ```
-IDLE --> PLANNING --> TASKING --> CODING --> LINTING --> SECURITY_SCANNING --> REVIEWING --> DONE
-                                                               |                    |
-                                                               |     HIGH/CRITICAL   |
-                                                               |          ↓          | (review issues)
-                                                               |   SECURITY_FIXING   |      ↓
-                                                               |          |          |   FIXING
-                                                               |          ↓          |      |
-                                                               └── SECURITY_SCANNING ←──────┘
-                                                                                    |
-                                                                                    v (max 3 loops)
-                                                                                  ESCALATE
+IDLE --> PLANNING --> TASKING --> CODING --> SECURITY_SCANNING --> REVIEWING --> DONE
+                                   │              │                    │
+                                   │  HIGH/CRIT   │                    │ (review issues)
+                                   │      ↓       │                    ↓
+                                   │  SECURITY_   │                 FIXING
+                                   │   FIXING     │                    │
+                                   │      │       │                    │
+                                   │      └───────┘←───────────────────┘
+                                   │              (re-scan after fix)
+                                   │              │
+                                   │              v (max 3 loops each)
+                                   │           ESCALATED
+                                   │
+                                   └── lint runs INLINE inside Code/Fix agents
 ```
 
 ## Agent Pipeline
@@ -28,8 +42,8 @@ Agent Task      → generates tasks.md (breaks plan into implementable tasks)
 For each task in tasks.md:
   ┌──────────────────────────────────────────────────────────┐
   │ Agent Code   → implements task, writes tests              │
-  │      ↓                                                    │
-  │ Agent Lint   → format + static check changed files        │
+  │              (lint runs inline: gofmt, goimports,         │
+  │               golangci-lint on changed files)             │
   │      ↓                                                    │
   │ Agent Security → scans changed files                      │
   │      ↓                                                    │
@@ -42,7 +56,7 @@ For each task in tasks.md:
   │      ↓                                                    │
   │  Review verdict?                                          │
   │    APPROVED         → mark task done, next task           │
-  │    NEEDS CHANGES    → Agent Fix → back to Lint            │
+  │    NEEDS CHANGES    → Agent Fix (lint inline) → back to Security            │
   │    loop_count > 3   → ESCALATE to user                    │
   └──────────────────────────────────────────────────────────┘
      ↓
@@ -72,24 +86,21 @@ All tasks done → DONE
 
 5. For each task in tasks.md (in order):
    a. Run Agent Code → implements task on feature branch, writes tests
-      - Set state to "LINTING"
-   b. Run Agent Lint → formats and checks changed files
+      - Lint runs INLINE (gofmt, goimports, golangci-lint on changed files)
       - Set state to "SECURITY_SCANNING"
-   c. Run Agent Security → scans changed files for vulnerabilities
-      - If CRITICAL or HIGH findings found:
-        - Set state to "SECURITY_FIXING"
-        - Run Agent Fix Security (reads security report, fixes only security issues)
-        - Create report: reports/<ts>_fix_security_agent.md
-        - Re-run Agent Security (back to step c)
-        - Increment security_fix_count
-        - If security_fix_count > 3 → ESCALATE to user, stop pipeline
-      - If CLEAN (no CRITICAL/HIGH) → Set state to "REVIEWING"
-   d. Run Agent Review → reviews all changes
-      - If APPROVED → mark task complete, continue to next task
-      - If NEEDS CHANGES → set state to "FIXING", run Agent Fix
-        - Agent Fix → back to step b (Lint)
-        - If loop_count > 3 → ESCALATE to user, stop pipeline
-   e. Move to next task
+   b. Run Agent Security → scans changed packages for vulnerabilities
+      - Agent Security OWNS the security fix loop:
+        - If CRITICAL or HIGH found: set state "SECURITY_FIXING", increment security_fix_count
+        - Run Agent Fix Security → re-run Agent Security (back to step b)
+        - If security_fix_count > max_security_fixes (3) → ESCALATE, stop
+      - If CLEAN → set state to "REVIEWING"
+   c. Run Agent Review → reviews all changes
+      - If APPROVED → increment completed_tasks, reset loop_count + security_fix_count to 0
+        - Next task: set state to "CODING"; no tasks left: set state to "DONE"
+      - If NEEDS CHANGES → increment loop_count, set state "FIXING", run Agent Fix
+        - Agent Fix runs lint inline → set state "SECURITY_SCANNING" (back to step b)
+        - If loop_count >= max_loops (3) → ESCALATE, stop pipeline
+   d. Move to next task
 
 6. All tasks complete → set state to "DONE"
    - Stay on branch (user decides merge)
@@ -102,7 +113,7 @@ All tasks done → DONE
 /agent-plan "<requirement>"     → Agent Plan only (or /agent-plan path/to/file.md)
 /agent-task                     → Agent Task only (reads existing plan.md)
 /agent-code                     → Agent Code (reads tasks.md, implements next TODO task)
-/agent-lint                     → Agent Lint only (changed files)
+/agent-lint                     → Agent Lint only (optional standalone; lint is inline in Code/Fix agents)
 /agent-security                 → Agent Security only (changed files)
 /agent-security-fix             → Agent Security + auto-fix HIGH/CRITICAL findings
 /agent-review                   → Agent Review only
