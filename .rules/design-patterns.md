@@ -393,15 +393,31 @@ func transform(ctx context.Context, in <-chan int) <-chan string {
 ```
 GO IDIOM: NewXxx(deps...) pattern
 
-func NewUserService(repo UserRepository, logger *slog.Logger, eventBus *EventBus) *UserService {
+func NewUserService(repo UserRepository, logger *zap.Logger, eventBus *EventBus) *UserService {
     return &UserService{
         repo:     repo,
-        logger:   logger,
+        logger:   logger.With(zap.String("component", "UserService")), // component-scoped logger
         eventBus: eventBus,
     }
 }
 
 REQUIRED: Every dependency injected via constructor
+REQUIRED: Create a component-scoped child logger in constructor using logger.With().
+          This pre-attaches "component" field to ALL log statements from this struct
+          without repeating it on every log call.
+
+          // BAD — repeated on every log call:
+          s.logger.Info("creating user", zap.String("component", "UserService"), ...)
+          s.logger.Error("failed", zap.String("component", "UserService"), ...)
+
+          // GOOD — set once in constructor, auto-appended everywhere:
+          s.logger = logger.With(zap.String("component", "UserService"))
+          s.logger.Info("creating user", ...)   // → {"component":"UserService","msg":"creating user"}
+          s.logger.Error("failed", ...)         // → {"component":"UserService","msg":"failed"}
+
+          Benefit: logs are filterable by component in Kibana/Loki/Datadog:
+          component="UserService" AND level="error"
+
 FORBIDDEN: Global variables for dependencies
 OPTIONAL: wire (Google) or fx (Uber) for complex DI
 ```

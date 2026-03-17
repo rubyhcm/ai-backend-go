@@ -32,12 +32,18 @@ Execute the full pipeline in this exact order:
 
 ### Step 3: For each task in tasks.md (in order):
 
-#### 3a: CODING + LINT (inline)
+#### 3a: CODING
 - Read `prompts/agent-code.md` and execute Agent Code for the current task.
-- Agent Code runs lint inline: gofmt, goimports, golangci-lint on changed files.
+- Create feature branch, implement code + unit tests.
+- Commit changes.
 - Create report: `reports/<unix_timestamp>_code_agent.md`
 
-#### 3b: SECURITY SCANNING + AUTO-FIX
+#### 3b: LINTING
+- Read `prompts/agent-lint.md` and execute Agent Lint.
+- Format and check changed files only.
+- Create report: `reports/<unix_timestamp>_lint_agent.md`
+
+#### 3c: SECURITY SCANNING + AUTO-FIX
 - Read `prompts/agent-security.md` and execute Agent Security.
 - Scan changed files for vulnerabilities (gosec, govulncheck, Semgrep, Snyk).
 - Create report: `reports/<unix_timestamp>_security_agent.md`
@@ -45,24 +51,24 @@ Execute the full pipeline in this exact order:
   - Set state to `SECURITY_FIXING`, increment `security_fix_count`
   - If `security_fix_count > 3`: ESCALATE to user, stop pipeline entirely
   - Read `prompts/agent-fix-security.md` and execute Agent Fix Security
-  - Agent Fix Security fixes CRITICAL findings first, then HIGH (lint runs inline)
+  - Agent Fix Security fixes CRITICAL findings first, then HIGH
   - Create report: `reports/<unix_timestamp>_fix_security_agent.md`
-  - Re-run Agent Security (back to step 3b) to verify fixes
+  - Re-run Agent Security (back to step 3c) to verify fixes
   - Repeat until CLEAN or max attempts exceeded
-- **If CLEAN (no CRITICAL/HIGH):** Set state to `REVIEWING`, proceed to 3c
+- **If CLEAN (no CRITICAL/HIGH):** Set state to `REVIEWING`, proceed to 3d
 
-#### 3c: REVIEWING
+#### 3d: REVIEWING
 - Read `prompts/agent-review.md` and execute Agent Review.
-- Review all changes including security reports.
+- Review all changes including lint/security reports.
 - Create report: `reports/<unix_timestamp>_review_agent.md`
 
-#### 3d: If review NEEDS CHANGES:
-- Read `prompts/agent-fix.md` and execute Agent Fix (lint runs inline after fix).
+#### 3e: If review NEEDS CHANGES:
+- Read `prompts/agent-fix.md` and execute Agent Fix.
 - Create report: `reports/<unix_timestamp>_fix_agent.md`
-- Go back to step 3b (Security).
+- Go back to step 3b (Lint).
 - If loop_count > 3: ESCALATE to user, stop.
 
-#### 3e: If review APPROVED:
+#### 3f: If review APPROVED:
 - Mark task as complete in tasks.md
 - Continue to next task.
 
