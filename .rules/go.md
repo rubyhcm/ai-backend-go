@@ -107,9 +107,16 @@ REQUIRED: Every log statement MUST include a "component" field as prefix
           so logs can be filtered/searched by component name.
           Format: logger.Info("message", zap.String("component", "PartnerAuth"), ...)
           Or use a child logger: log = logger.With(zap.String("component", "PartnerAuth"))
-REQUIRED: Use the child logger pattern — create component logger once in constructor:
-          p.log = logger.With(zap.String("component", "ServiceName"))
-          then use p.log.Info/Warn/Error throughout
+REQUIRED: Use the child logger pattern — create component logger ONCE in constructor:
+          func NewXxxServer(..., logger *zap.Logger) *XxxServer {
+              return &XxxServer{
+                  logger: logger.With(zap.String("component", "XxxServer")),
+              }
+          }
+          Naming: gRPC servers use PascalCase ("AuthServer"), usecases use snake_case ("auth_usecase")
+          then use s.logger.Info/Warn/Error throughout the struct methods
+FORBIDDEN: Storing raw logger without .With() in constructors (logger: logger)
+FORBIDDEN: Adding zap.String("component", ...) inline on every log call instead of constructor
 FORBIDDEN: fmt.Println for logging
 FORBIDDEN: Log sensitive data (passwords, tokens, PII)
 FORBIDDEN: Bare log statements without component field
