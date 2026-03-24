@@ -33,16 +33,19 @@ Repository này là bộ hướng dẫn để dùng với Claude Code theo mô h
 - Nếu repo đích là Go project, các prompt/rules vẫn áp dụng bình thường.
 
 ## Overview
+
+```text
 ai_tech/
-├── prompts/          ← Bộ não của agents
-├── .claude/commands/ ← Slash commands cho user
-├── .rules/           ← Luật viết code
-├── .ai-agents/       ← Workspace runtime
-├── scripts/          ← Scripts dùng chung (gen_sonar_report.py, ...)
-├── docs/             ← Tài liệu hướng dẫn
+├── prompts/                   # Bộ não của agents
+├── .claude/commands/          # Slash commands cho user
+├── .rules/                    # Luật viết code
+├── .ai-agents/                # Workspace runtime
+├── scripts/                   # Scripts dùng chung (gen_sonar_report.py, ...)
+├── docs/                      # Tài liệu hướng dẫn
 ├── reports/
-├── README.md         ← Giới thiệu hệ thống
-├── HUONG_DAN_SU_DUNG.md ← Hướng dẫn cho người dùng
-├── sonar-project.properties ← Cấu hình SonarCloud
+├── README.md                  # Giới thiệu hệ thống
+├── HUONG_DAN_SU_DUNG.md       # Hướng dẫn cho người dùng
+├── sonar-project.properties   # Cấu hình SonarCloud
 ├── .gitignore
 └── .golangci.yml
+```
