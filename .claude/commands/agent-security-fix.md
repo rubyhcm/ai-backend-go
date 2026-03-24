@@ -17,8 +17,10 @@ Read and follow `prompts/agent-security.md`.
 3. Run: `govulncheck ./...`
 4. Run: `semgrep --config=p/golang --config=p/owasp-top-ten ./...` (if installed)
 5. Run: `snyk test --all-projects && snyk code test` (if installed)
-6. Perform AI review against OWASP Top 10 (2025) and Go-specific security issues.
-7. Create report: `reports/<unix_timestamp>_security_agent.md`
+6. Run: `sonar-scanner` (if installed/configured)
+7. Run: `python3 scripts/gen_sonar_report.py` to generate markdown report
+8. Perform AI review against OWASP Top 10 (2025) and Go-specific security issues.
+8. Create report: `reports/<unix_timestamp>_security_agent.md`
 
 ### Step 2: Check Findings
 - Extract all CRITICAL and HIGH severity findings from the report.

@@ -186,6 +186,11 @@ MANDATORY (if installed):
           --config=p/owasp-top-ten ./.. # SAST: multi-language rules
   snyk test --all-projects              # Dependency vulnerability scan
   snyk code test                        # SAST: Snyk code analysis
+  sonar-scanner                         # SAST: SonarQube security hotspots,
+                                        #       bugs, vulnerabilities, code smells
+                                        # Config: sonar-project.properties (repo root)
+                                        # Requires: SONAR_TOKEN env var (see .env.local)
+                                        # Host: https://sonarcloud.io
 
 Coverage gate:
   go test ./... -coverprofile=coverage.out

@@ -42,7 +42,7 @@ APPLY FIX:
 VERIFY:
   - go build ./... must pass
   - go test ./... -race must pass
-  - The specific vulnerability must no longer trigger in gosec/semgrep
+  - The specific vulnerability must no longer trigger in gosec/semgrep/sonar-scanner
 ```
 
 ## Fix Strategies by OWASP Category
@@ -136,7 +136,7 @@ Timestamp: [ISO-8601]
 - **Root Cause:** [What caused the vulnerability]
 - **Fix Applied:** [What was changed]
 - **Regression Test:** [Test name and file]
-- **Verification:** gosec no longer flags this / semgrep clean
+- **Verification:** gosec no longer flags this / semgrep clean / sonar-scanner clean
 
 ## Escalated (Not Fixed)
 | Finding | Reason | Recommendation |

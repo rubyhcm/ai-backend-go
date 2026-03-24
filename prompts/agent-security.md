@@ -50,7 +50,32 @@ snyk code test
 If snyk is not installed: `npm install -g snyk` then `snyk auth`.
 Document in report if skipped due to unavailability.
 
-### Step 5: Check go.mod for known vulnerable versions
+### Step 5: SonarQube (Comprehensive SAST + Code Quality)
+```bash
+# Generate coverage before scanning
+go test ./... -coverprofile=coverage.out
+
+# Run SonarCloud scanner (config from sonar-project.properties)
+export $(cat .env.local | xargs) && sonar-scanner
+
+# Generate SonarCloud markdown report automatically
+python3 scripts/gen_sonar_report.py
+```
+Config file: `sonar-project.properties` in repo root (host: https://sonarcloud.io).
+Token: loaded from `.env.local` via `SONAR_TOKEN` env var.
+Report script: `scripts/gen_sonar_report.py` — auto-reads `.env.local` and `sonar-project.properties`, writes `reports/<timestamp>_sonarcloud_report.md`.
+If sonar-scanner is not installed: `brew install sonar-scanner` or `scoop install sonar-scanner`.
+Document in report if skipped due to unavailability.
+**IMPORTANT:** `sonar.organization` and `sonar.projectKey` must be set in `sonar-project.properties`.
+
+SonarQube checks for:
+- Security hotspots (OWASP, CWE, SANS Top 25)
+- Bugs and code smells in Go code
+- Code coverage integration
+- Duplicated code blocks
+- Cognitive complexity
+
+### Step 6: Check go.mod for known vulnerable versions
 ```bash
 go list -m -json all
 ```
@@ -178,6 +203,7 @@ MUST DO:
   - Run gosec and govulncheck (mandatory)
   - Run Semgrep with Go + OWASP rulesets (mandatory if installed)
   - Run Snyk test + snyk code test (mandatory if installed)
+  - Run sonar-scanner (mandatory if installed/configured)
   - Report ALL findings with severity, file:line, and fix suggestion
   - Flag any hardcoded secrets immediately (CRITICAL)
   - Block merge if ANY CRITICAL or HIGH finding is unresolved
@@ -187,7 +213,7 @@ MUST NOT DO:
   - Ignore findings because "it's just internal code"
   - Skip dependency vulnerability check
   - Mark CRITICAL/HIGH as LOW to pass review
-  - Skip Semgrep/Snyk without documenting why
+  - Skip Semgrep/Snyk/SonarQube without documenting why
 ```
 
 ## Report
@@ -210,6 +236,7 @@ Timestamp: [ISO-8601]
 - Semgrep: [PASS/FAIL/SKIPPED] ([N] findings)
 - Snyk test: [PASS/FAIL/SKIPPED] ([N] vulnerabilities)
 - Snyk code: [PASS/FAIL/SKIPPED] ([N] findings)
+- SonarQube: [PASS/FAIL/SKIPPED] ([N] issues)
 - AI OWASP review: completed on [N] files
 - AI Go-specific review: completed on [N] files
 
@@ -237,6 +264,13 @@ Timestamp: [ISO-8601]
 |------|----------|-------------|-------|
 | Dependency | HIGH | github.com/pkg/v1.0 | Known CVE |
 | Code | MEDIUM | file.go:42 | Hardcoded credential |
+
+#### SonarQube Results
+| Type | Severity | Rule | File:Line | Description |
+|------|----------|------|-----------|-------------|
+| Security Hotspot | HIGH | go:S2077 | file.go:55 | SQL injection risk |
+| Bug | MEDIUM | go:S1751 | file.go:88 | Unreachable code |
+| Vulnerability | CRITICAL | go:S5542 | file.go:12 | Weak cryptography |
 
 ### AI Security Review
 
@@ -272,6 +306,7 @@ Timestamp: [ISO-8601]
 - govulncheck: PASS/FAIL
 - Semgrep: PASS/FAIL/SKIPPED (reason if skipped)
 - Snyk: PASS/FAIL/SKIPPED (reason if skipped)
+- SonarQube: PASS/FAIL/SKIPPED (reason if skipped)
 - OWASP compliance: [N]/10 categories checked
 - **Gate result: PASS / BLOCKED** (blocked if any CRITICAL or HIGH unresolved)
 
@@ -332,6 +367,7 @@ Timestamp: [ISO-8601]
 - gosec: [PASS|FAIL] | findings: C:[N] H:[N] M:[N]
 - govulncheck: [PASS|FAIL]
 - Semgrep: [PASS|FAIL|SKIPPED]
+- SonarQube: [PASS|FAIL|SKIPPED]
 - Gate: [CLEAN → proceed to review | BLOCKED → security_fix_count=[N]]
 ```
 
