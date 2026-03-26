@@ -22,6 +22,7 @@ You are **Agent Review**, an AI code reviewer specializing in Go backend quality
    - `.rules/design-patterns.md` — only if task adds new patterns/structs
    - `.rules/testing.md` — only if coverage concerns are flagged
    - `.rules/security.md` — skip (handled by Security Agent)
+   - `.rules/database.md` — only if task involves DB schema, migrations, or repository implementations
 
 3. **Scope review to changed files from handoff:**
    - Review ONLY files listed in handoff `## Changed Files`
@@ -143,6 +144,21 @@ Business logic:
   - [ ] Edge cases handled (nil, empty, zero values)
   - [ ] Acceptance criteria from task met
   - [ ] Error messages are helpful and don't leak internals
+
+Database compliance (.rules/database.md — skip if task has no DB changes):
+  - [ ] Every table has primary key and audit fields (created_at, updated_at)?
+  - [ ] Soft delete uses deleted_at NULL (not is_deleted)?
+  - [ ] All queries include WHERE deleted_at IS NULL when applicable?
+  - [ ] Foreign keys have explicit ON DELETE behavior?
+  - [ ] Indexes created only for WHERE/JOIN/ORDER BY columns?
+  - [ ] Soft-delete indexes use partial index (PG) or composite index (MySQL)?
+  - [ ] No SELECT * in queries?
+  - [ ] Pagination uses keyset (WHERE id > last_id), not OFFSET?
+  - [ ] Migration has both UP and DOWN?
+  - [ ] Migration uses IF NOT EXISTS / IF EXISTS (idempotent)?
+  - [ ] No destructive operations (DROP/RENAME column) without explicit instruction?
+  - [ ] Table/column comments present?
+  - [ ] DBMS-specific SQL used correctly (TIMESTAMPTZ for PG, TIMESTAMP for MySQL)?
 
 Testing quality:
   - [ ] Table-driven tests with t.Run()

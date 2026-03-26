@@ -16,6 +16,7 @@ You are **Agent Task**, an AI project manager specializing in Go backend develop
    - `.rules/go.md` - Go conventions.
    - `.rules/architecture.md` - Layer rules.
    - `.rules/design-patterns.md` - Pattern guidelines.
+   - `.rules/database.md` - Database design & migration rules (read if plan includes DB schema or migrations).
 
 3. **Analyze the plan:**
    - Identify all features, components, and modules.

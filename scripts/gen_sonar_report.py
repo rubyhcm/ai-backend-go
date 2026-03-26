@@ -6,7 +6,7 @@ Usage: python3 ~/.claude/scripts/gen_sonar_report.py
        Writes report to reports/<timestamp>_sonarcloud_report.md
 """
 
-import json, datetime, os, urllib.request, urllib.parse, base64, sys
+import json, datetime, os, urllib.request, urllib.parse, base64, sys, time
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -62,7 +62,7 @@ def get(path, params={}):
 def fetch_all_issues(extra_params={}):
     issues, page = [], 1
     while True:
-        params = {"componentKeys": project, "ps": 500, "p": page, **extra_params}
+        params = {"componentKeys": project, "ps": 500, "p": page, "statuses": "OPEN,CONFIRMED,REOPENED", **extra_params}
         d = get("issues/search", params)
         issues += d["issues"]
         if len(issues) >= d["total"] or page * 500 >= 10000:
@@ -79,6 +79,38 @@ def fetch_all_hotspots():
             break
         page += 1
     return hs
+
+# ── Wait for latest analysis task to complete ─────────────────────────────────
+
+def wait_for_analysis(timeout=120, interval=5):
+    """Poll ce/activity until the latest task for this project is SUCCESS (or timeout)."""
+    print(f"[sonar-report] Waiting for SonarCloud to finish processing analysis...")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            d = get("ce/activity", {"component": project, "ps": 1})
+            tasks = d.get("tasks", [])
+            if not tasks:
+                time.sleep(interval)
+                continue
+            task = tasks[0]
+            status = task.get("status", "")
+            if status == "SUCCESS":
+                print(f"[sonar-report] Analysis complete (task {task['id']}).")
+                return
+            elif status in ("FAILED", "CANCELLED"):
+                print(f"[sonar-report] WARNING: Latest analysis task status={status}. Report may reflect previous scan.")
+                return
+            else:
+                elapsed = int(time.time() - (deadline - timeout))
+                print(f"[sonar-report] Task status={status}, waiting... ({elapsed}s)")
+                time.sleep(interval)
+        except Exception as e:
+            print(f"[sonar-report] Poll error: {e}")
+            time.sleep(interval)
+    print(f"[sonar-report] WARNING: Timed out after {timeout}s waiting for analysis. Report may be stale.")
+
+wait_for_analysis()
 
 # ── Fetch data ────────────────────────────────────────────────────────────────
 

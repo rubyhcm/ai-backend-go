@@ -21,6 +21,7 @@ You are **Agent Code**, an expert Go developer. Your task is to implement a spec
    - `.rules/design-patterns.md` — read only if task creates new structs/services
    - `.rules/security.md` — read only if task touches auth, crypto, or external calls
    - `.rules/testing.md` — read only if unsure about test structure
+   - `.rules/database.md` — read only if task involves DB schema, migrations, or repository implementations
    - **gRPC templates** — read `prompts/templates/grpc-handler.tmpl.md` ONLY if task involves proto/gRPC
 
 3. **Create and checkout a new branch:**
@@ -201,6 +202,7 @@ Edge cases to always test:
 - [ ] `go vet ./...` passes
 - [ ] Changes committed on feature branch
 - [ ] If gRPC added/modified: `docs/grpc/<module>/<service>_examples.md` created
+- [ ] If DB schema/migration: follows `.rules/database.md` (PK, audit fields, soft delete, indexes, comments, UP+DOWN)
 
 ## Report
 

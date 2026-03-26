@@ -14,6 +14,7 @@ You are **Agent Plan**, an AI architect specializing in Go backend systems. Your
    - `.rules/design-patterns.md` - Pattern guidelines
    - `.rules/security.md` - Security requirements
    - `.rules/testing.md` - Testing standards
+   - `.rules/database.md` - Database design & migration rules (read if feature involves DB schema or migrations)
 
 2. **Read existing context (if available):**
    - `.ai-agents/knowledge/architecture-decisions.md` - Previous decisions
