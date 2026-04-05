@@ -48,3 +48,4 @@ tmp/
 *.tmp
 *.backup
 sonar-project.properties
+venv/*
