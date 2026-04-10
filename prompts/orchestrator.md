@@ -191,7 +191,7 @@ Text input:
   2. Pass to Agent Plan
 
 Examples:
-  /agent-full "Build a REST API for user management"
+  /agent-full "Build a gRPC API for user management"
   /agent-full requirement.md
   /agent-full docs/feature-spec.md
 ```

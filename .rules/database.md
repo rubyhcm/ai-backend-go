@@ -214,17 +214,129 @@ Every migration MUST have version (timestamp or incremental).
 
 ### 7.2 Idempotency
 
-Use: `IF NOT EXISTS`, `IF EXISTS`.
+Every migration MUST be idempotent — safe to run multiple times without error.
 
-### 7.3 Rollback
+**CREATE TABLE:**
+```sql
+CREATE TABLE IF NOT EXISTS users (...);
+```
+
+**ADD COLUMN:**
+```sql
+-- PostgreSQL
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20) NULL;
+
+-- MySQL (no native IF NOT EXISTS for ADD COLUMN — use stored procedure or migration tool check)
+```
+
+**CREATE INDEX:**
+```sql
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+```
+
+**DROP TABLE / DROP COLUMN:**
+```sql
+DROP TABLE IF EXISTS legacy_users;
+ALTER TABLE users DROP COLUMN IF EXISTS old_field;  -- PostgreSQL only
+```
+
+**CREATE/DROP CONSTRAINT:**
+```sql
+-- PostgreSQL: check existence before adding
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_orders_user_id'
+  ) THEN
+    ALTER TABLE orders ADD CONSTRAINT fk_orders_user_id
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;
+  END IF;
+END $$;
+```
+
+### 7.3 Transaction Safety (CRITICAL)
+
+**Wrap every migration in a transaction** to ensure atomicity:
+
+```sql
+-- PostgreSQL (supports transactional DDL)
+BEGIN;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20) NULL;
+CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+
+COMMIT;
+-- On failure: ROLLBACK is automatic
+```
+
+**Rules:**
+- PostgreSQL: ALL DDL statements (CREATE, ALTER, DROP) are transactional → wrap in `BEGIN/COMMIT`
+- MySQL: DDL causes implicit commit → **transactions do NOT protect DDL in MySQL**
+  - Use migration tools (Flyway, Liquibase, golang-migrate) to track execution state
+  - Keep each MySQL migration file atomic (single logical change)
+- NEVER mix DML + DDL in same transaction on MySQL
+- On failure: migration MUST leave the database in its original state (for PostgreSQL) or be re-runnable (for MySQL via idempotency)
+
+**PostgreSQL example — full safe migration:**
+```sql
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS orders (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id     BIGINT NOT NULL,
+    status      VARCHAR(20) NOT NULL DEFAULT 'PENDING'
+                    CHECK (status IN ('PENDING', 'CONFIRMED', 'CANCELED')),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at  TIMESTAMPTZ NULL,
+    version     INT NOT NULL DEFAULT 1,
+    CONSTRAINT fk_orders_user_id FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE RESTRICT
+);
+
+COMMENT ON TABLE orders IS 'Customer orders';
+COMMENT ON COLUMN orders.status IS 'Order lifecycle: PENDING, CONFIRMED, CANCELED';
+
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status_active ON orders(status)
+WHERE deleted_at IS NULL;
+
+COMMIT;
+```
+
+**MySQL example — idempotent migration (no transaction for DDL):**
+```sql
+-- Each statement must be independently idempotent
+CREATE TABLE IF NOT EXISTS orders (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id    BIGINT NOT NULL,
+    status     VARCHAR(20) NOT NULL DEFAULT 'PENDING'
+                   COMMENT 'Order status: PENDING, CONFIRMED, CANCELED',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL
+) COMMENT = 'Customer orders';
+
+-- Index: check via migration tool, or use CREATE INDEX IF NOT EXISTS (MySQL 8.0.29+)
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+```
+
+### 7.4 Rollback
 
 Every `UP` MUST have `DOWN`.
 
-### 7.4 Safety
+```sql
+-- DOWN migration must reverse UP exactly
+-- PostgreSQL
+BEGIN;
+DROP TABLE IF EXISTS orders;
+COMMIT;
+```
+
+### 7.5 Safety
 
 DO NOT drop columns/tables or modify data destructively without explicit instruction.
 
-### 7.5 Zero-Downtime Strategy (CRITICAL)
+### 7.6 Zero-Downtime Strategy (CRITICAL)
 
 Use **Expand → Migrate → Contract**:
 1. Add new column (nullable)
@@ -233,6 +345,16 @@ Use **Expand → Migrate → Contract**:
 4. Remove old column (later)
 
 - DO NOT rename columns directly or drop columns immediately.
+
+## 7.7 Migration Checklist
+
+Before committing any migration file, verify:
+- [ ] Wrapped in `BEGIN/COMMIT` (PostgreSQL)
+- [ ] All `CREATE` use `IF NOT EXISTS`
+- [ ] All `DROP` use `IF EXISTS`
+- [ ] DOWN migration exists and reverses UP exactly
+- [ ] No `SELECT *` or unparameterized queries
+- [ ] No destructive data change without explicit instruction
 
 ## 8. Query Rules
 

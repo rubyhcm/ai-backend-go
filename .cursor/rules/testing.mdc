@@ -1,0 +1,178 @@
+---
+description: Testing standards: table-driven tests, mocking, coverage gates, integration tests.
+globs: ["**/*_test.go"]
+alwaysApply: false
+---
+
+# Testing Standards
+
+## Table-Driven Tests (MANDATORY)
+
+```go
+func TestUserService_GetByID(t *testing.T) {
+    tests := []struct {
+        name    string
+        id      string
+        setup   func(*MockUserRepository)
+        want    *domain.User
+        wantErr error
+    }{
+        {
+            name: "success - user found",
+            id:   "user-123",
+            setup: func(m *MockUserRepository) {
+                m.EXPECT().FindByID(gomock.Any(), "user-123").
+                    Return(&domain.User{ID: "user-123", Name: "John"}, nil)
+            },
+            want: &domain.User{ID: "user-123", Name: "John"},
+        },
+        {
+            name: "error - user not found",
+            id:   "user-999",
+            setup: func(m *MockUserRepository) {
+                m.EXPECT().FindByID(gomock.Any(), "user-999").
+                    Return(nil, domain.ErrNotFound)
+            },
+            wantErr: domain.ErrNotFound,
+        },
+        {
+            name:    "error - empty id",
+            id:      "",
+            setup:   func(m *MockUserRepository) {},
+            wantErr: domain.ErrInvalid,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            ctrl := gomock.NewController(t)
+            defer ctrl.Finish()
+
+            repo := NewMockUserRepository(ctrl)
+            tt.setup(repo)
+
+            svc := NewUserService(repo, zap.NewNop())
+            got, err := svc.GetByID(context.Background(), tt.id)
+
+            if tt.wantErr != nil {
+                require.ErrorIs(t, err, tt.wantErr)
+                return
+            }
+            require.NoError(t, err)
+            assert.Equal(t, tt.want, got)
+        })
+    }
+}
+```
+
+## Assertion Rules (ANTI COVERAGE TRAP)
+
+```
+MANDATORY: Every test case MUST have assert/require
+  - assert returned value (NEVER just call function and ignore result)
+  - assert error (wantErr → require.ErrorIs, no error → require.NoError)
+  - assert state changes (verify mock expectations)
+
+FORBIDDEN: Test that only calls a function without any assertion
+FORBIDDEN: Test with empty assertions (assert.True(t, true))
+FORBIDDEN: Test that does not check error return
+FORBIDDEN: Mock returning a value that is never verified
+```
+
+## Mocking
+
+```go
+// Generate mocks
+//go:generate mockgen -source=user_service.go -destination=mock_user_repo_test.go -package=service
+
+// Mock setup
+ctrl := gomock.NewController(t)
+defer ctrl.Finish()  // verify all expectations
+repo := NewMockUserRepository(ctrl)
+```
+
+- **REQUIRED**: gomock for interface mocking
+- **REQUIRED**: testify/assert + testify/require for assertions
+- **REQUIRED**: Mock EXPECTATIONS must be verified
+- **OPTIONAL**: testify/mock when flexibility is needed
+
+## Test Naming Convention
+
+```
+Format: Test<Struct>_<Method>/<scenario>
+
+Examples:
+  TestUserService_GetByID/success
+  TestUserService_GetByID/not_found
+  TestUserService_Create/invalid_email
+  TestUserHandler_Create/unauthorized
+```
+
+## Test File Placement
+
+```
+Unit tests:        internal/service/user_service_test.go     (same package)
+Handler tests:     internal/handler/user_handler_test.go      (same package)
+Integration tests: tests/integration/user_test.go             (separate dir)
+Test helpers:      internal/testutil/helpers.go               (shared test utils)
+Test fixtures:     testdata/                                  (test data files)
+```
+
+## Coverage Gates
+
+| Layer | Target |
+|-------|--------|
+| `domain/` | ≥ 90% |
+| `service/` | ≥ 85% |
+| `handler/` or `grpc/` | ≥ 80% |
+| `repository/` | ≥ 70% |
+| Critical paths (auth, payment) | ≥ 95% |
+| Overall | ≥ 80% |
+
+Coverage % is a guideline. **Quality of assertions matters MORE than coverage number.**
+
+## Integration Tests
+
+```go
+//go:build integration
+
+func TestUserRepo_Integration(t *testing.T) {
+    ctx := context.Background()
+    pg, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+        ContainerRequest: testcontainers.ContainerRequest{
+            Image:        "postgres:16-alpine",
+            ExposedPorts: []string{"5432/tcp"},
+            Env: map[string]string{
+                "POSTGRES_PASSWORD": "test",
+                "POSTGRES_DB":       "testdb",
+            },
+            WaitingFor: wait.ForListeningPort("5432/tcp"),
+        },
+        Started: true,
+    })
+    require.NoError(t, err)
+    defer pg.Terminate(ctx)
+    // ... test against real DB
+}
+
+// Run unit tests only
+// go test ./...
+
+// Run integration tests
+// go test -tags=integration ./tests/integration/...
+```
+
+## Race Detection
+
+```
+REQUIRED: Run go test -race in CI
+REQUIRED: Run go test -race locally before commit for concurrent code
+REQUIRED: Fix ALL race conditions (zero tolerance)
+```
+
+## Required Test Cases Per Function
+
+- Happy path
+- Error paths (DB error, validation error, not found)
+- Edge cases: nil input, empty string, zero value, boundary values
+- Context cancellation / timeout

@@ -1,0 +1,154 @@
+---
+description: Clean Architecture layer rules, dependency direction, project structure, and gRPC workflow.
+globs: ["internal/**/*.go", "cmd/**/*.go", "api/proto/**/*.proto"]
+alwaysApply: false
+---
+
+# Architecture Rules
+
+## Layer Map
+
+| Layer | Package | Can import |
+|-------|---------|------------|
+| Domain | `internal/domain/` | standard library only |
+| Service / Usecase | `internal/service/` | domain only |
+| Repository impl | `internal/repository/` | domain only (for types) |
+| Handler (gRPC/HTTP) | `internal/handler/` or `internal/grpc/` | service only |
+| Infra | `internal/infra/` | domain only (for types) |
+| Pkg | `pkg/` | standard library only |
+
+**Dependency direction:** `handler → service → domain`. Never reverse.
+
+```
+FORBIDDEN:
+  - Circular dependencies between packages
+  - domain/ importing any internal package
+  - handler/ importing repository/ directly
+  - service/ importing infra/ directly
+```
+
+- Interfaces are defined at the **consumer side** (e.g., `service/` defines the repo interface it needs).
+- Domain layer must have **zero imports** from internal packages.
+- Handlers must contain **zero business logic** — delegate everything to service.
+
+## Project Structure
+
+```
+project-root/
+|-- cmd/api/main.go                      # Entry point, DI wiring
+|-- internal/
+|   |-- domain/
+|   |   |-- user.go                      # Entity
+|   |   |-- errors.go                    # Domain errors
+|   |   +-- value_objects.go             # Value objects
+|   |-- service/
+|   |   |-- user_service.go              # Use case + interface definition
+|   |   +-- user_service_test.go         # Unit tests
+|   |-- repository/
+|   |   |-- user_postgres.go             # Repository implementation
+|   |   +-- user_postgres_test.go        # Integration tests
+|   |-- handler/                         # HTTP handlers
+|   |   |-- user_handler.go
+|   |   |-- middleware/auth.go
+|   |   +-- router.go
+|   |-- grpc/                            # gRPC handlers
+|   |   |-- pb/<module>/                 # Generated — DO NOT edit
+|   |   |-- <service>_server.go
+|   |   +-- server.go
+|   +-- infra/
+|       |-- postgres.go
+|       |-- redis.go
+|       +-- config.go
+|-- pkg/logger/ | pkg/validator/
+|-- api/proto/                           # Protobuf definitions
+|-- configs/config.dev.yaml | config.prod.yaml
+|-- migrations/001_create_users.up.sql | .down.sql
+|-- tests/integration/
+```
+
+## Feature Implementation Workflow
+
+When implementing a new feature, follow this exact sequence:
+
+1. **Domain layer** — Create/update entities in `internal/domain/`
+2. **Domain errors** — Add to `internal/domain/errors.go` if new error types needed
+3. **Service interface** — Define repository interface in service file (consumer-side)
+4. **Service implementation** — Business logic in `internal/service/`
+5. **Service tests** — Table-driven tests with gomock
+6. **Repository implementation** — Data access in `internal/repository/`
+7. **Migration** — SQL migration file for any schema changes
+8. **Proto definition** — Add RPC methods to `api/proto/`
+9. **Code generation** — Run `buf generate`
+10. **gRPC handler** — In `internal/handler/`, embed `UnimplementedXxxServer`
+11. **Handler registration** — In `cmd/api/main.go` DI wiring
+12. **Handler tests** — Test request validation and error mapping
+
+## gRPC Workflow (MANDATORY)
+
+```
+Step 1 — PROTO DEFINITION
+  File: api/proto/<module>/<service>.proto
+  - syntax proto3, package <project>.<module>.v1
+  - google.protobuf.Timestamp for time fields
+
+Step 2 — CODE GENERATION
+  buf generate   # preferred
+  Generated files → internal/grpc/pb/<module>/
+  NEVER edit generated files manually.
+
+Step 3 — HANDLER IMPLEMENTATION
+  File: internal/grpc/<service>_server.go
+  - Embed pb.Unimplemented<Service>Server
+  - Constructor: New<Service>Server(usecase, logger) *<Service>Server
+  - Each RPC: validate input → call usecase → map to proto response
+  - Map domain errors to gRPC status codes
+
+Step 4 — SERVICE REGISTRATION
+  File: internal/grpc/server.go
+  - pb.Register<Service>Server(grpcServer, handler)
+```
+
+## gRPC Error Mapping
+
+| Domain Error | gRPC Code |
+|---|---|
+| `ErrNotFound` | `codes.NotFound` |
+| `ErrAlreadyExists` | `codes.AlreadyExists` |
+| `ErrPermissionDenied` | `codes.PermissionDenied` |
+| `ErrUnauthenticated` | `codes.Unauthenticated` |
+| `ErrInvalidInput` | `codes.InvalidArgument` |
+| `ErrTimeout` | `codes.DeadlineExceeded` |
+| `ErrInternal` | `codes.Internal` |
+
+```go
+// Use status.Errorf — never return raw errors from gRPC handlers
+return nil, status.Errorf(codes.NotFound, "resource not found")
+```
+
+## gRPC Handler Rules
+
+- **REQUIRED**: Embed `pb.Unimplemented<Service>Server`
+- **REQUIRED**: Validate all input fields before calling usecase
+- **REQUIRED**: Map ALL domain errors to gRPC status codes
+- **REQUIRED**: Use context deadline from incoming `ctx` — do NOT create new timeout
+- **FORBIDDEN**: Business logic inside gRPC handler
+- **FORBIDDEN**: Direct repository access from handler
+- **FORBIDDEN**: Returning raw Go errors — always wrap with `status.Errorf`
+- **FORBIDDEN**: Editing generated `pb/*.go` files
+
+## Dependency Injection
+
+```go
+// cmd/api/main.go — all wiring here
+db := postgres.NewConnection(cfg.DB)
+userRepo := repository.NewPostgresUserRepo(db)
+userSvc := service.NewUserService(userRepo, logger)
+userHandler := handler.NewUserHandler(userSvc)
+```
+
+- **REQUIRED**: Constructor injection via `NewXxx(deps...)`
+- **REQUIRED**: All wiring in `cmd/api/main.go`
+- **REQUIRED**: Interfaces for all external dependencies
+- **OPTIONAL**: `wire` (Google) or `fx` (Uber) for complex DI
+- **FORBIDDEN**: Global variables for dependencies
+- **FORBIDDEN**: `init()` for dependency setup

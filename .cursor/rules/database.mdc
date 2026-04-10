@@ -1,0 +1,234 @@
+---
+description: Database design, schema rules, indexing, migrations, and query patterns.
+globs: ["migrations/**/*.sql", "internal/repository/**/*.go"]
+alwaysApply: false
+---
+
+# Database Design & Migration Rules
+
+## Global Principles
+
+- **Consistency** — naming, structure, constraints across all tables
+- **Explicitness** — no implicit assumptions
+- **Backward compatibility** — support zero-downtime migrations
+- **Safety first** — avoid destructive operations
+- **Access pattern driven design** — optimize for real queries
+
+## Target DBMS Awareness (CRITICAL)
+
+**PostgreSQL**: use `TIMESTAMPTZ`, supports Partial Index, `gen_random_uuid()`, `COMMENT ON`
+**MySQL 8+**: use `TIMESTAMP`/`DATETIME`, NO Partial Index (use composite index workaround), inline comments
+
+## Table Requirements (MANDATORY for every table)
+
+### Primary Key
+
+```sql
+-- PostgreSQL
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY
+
+-- MySQL
+id BIGINT AUTO_INCREMENT PRIMARY KEY
+
+-- Distributed systems (optional)
+id UUID PRIMARY KEY
+```
+
+### Audit Fields
+
+```sql
+-- PostgreSQL
+created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+
+-- MySQL
+created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+```
+
+### Soft Delete (optional)
+
+```sql
+deleted_at TIMESTAMP NULL   -- NOT is_deleted boolean
+-- ALL queries MUST include: WHERE deleted_at IS NULL
+```
+
+### Versioning (optional — optimistic locking)
+
+```sql
+version INT NOT NULL DEFAULT 1
+```
+
+## Column Design Rules
+
+- Use `snake_case` naming — MUST be descriptive
+- Foreign keys: `<referenced_table_singular>_id` (e.g., `user_id`, `order_id`)
+- Columns are `NOT NULL` by default; only allow `NULL` if truly optional
+- Define defaults when meaningful
+- If table > 20 columns → evaluate vertical partitioning
+
+## Enum / Status Fields
+
+Prefer `VARCHAR + CHECK` or lookup table over native ENUM:
+
+```sql
+-- Option B: VARCHAR + CHECK
+status VARCHAR(20) CHECK (status IN ('ACTIVE', 'PENDING', 'CANCELED'))
+
+-- Option C: Lookup Table (RECOMMENDED for flexibility)
+status_id INT REFERENCES statuses(id)
+```
+
+Always document enum meanings via comments. DO NOT use magic numbers.
+
+## Indexing Strategy
+
+Create index ONLY when column is used in `WHERE`, `JOIN`, or `ORDER BY`.
+Prefer high-selectivity columns. Follow leftmost prefix rule for composite indexes.
+
+```sql
+-- PostgreSQL (Partial Index — preferred)
+CREATE INDEX idx_users_email_active ON users(email) WHERE deleted_at IS NULL;
+
+-- MySQL (Composite Index workaround)
+CREATE INDEX idx_users_email_deleted_at ON users(email, deleted_at);
+```
+
+### Unique Constraints
+
+```sql
+-- PostgreSQL (with soft delete)
+CREATE UNIQUE INDEX uk_email_active ON users(email) WHERE deleted_at IS NULL;
+
+-- MySQL
+UNIQUE KEY uk_email_deleted_at (email, deleted_at)
+```
+
+## Comments (MANDATORY)
+
+```sql
+-- PostgreSQL
+COMMENT ON TABLE users IS 'User information';
+COMMENT ON COLUMN users.email IS 'Unique email address, unique per active user';
+
+-- MySQL (inline)
+email VARCHAR(255) NOT NULL COMMENT 'Unique email address'
+```
+
+## Migration Rules
+
+- Every migration MUST have a version (timestamp or incremental)
+- Use `IF NOT EXISTS` / `IF EXISTS` for idempotency — every migration MUST be safe to re-run
+- Every `UP` MUST have a `DOWN`
+- **NEVER** drop columns/tables without explicit instruction
+
+### Idempotency Patterns
+
+```sql
+-- Tables
+CREATE TABLE IF NOT EXISTS users (...);
+
+-- Columns (PostgreSQL)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20) NULL;
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- Drop
+DROP TABLE IF EXISTS legacy_users;
+ALTER TABLE users DROP COLUMN IF EXISTS old_field;  -- PostgreSQL only
+
+-- Constraints (PostgreSQL — check before adding)
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_orders_user_id'
+  ) THEN
+    ALTER TABLE orders ADD CONSTRAINT fk_orders_user_id
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;
+  END IF;
+END $$;
+```
+
+### Transaction Safety (CRITICAL)
+
+**PostgreSQL** — supports transactional DDL → ALWAYS wrap migrations in `BEGIN/COMMIT`:
+
+```sql
+-- PostgreSQL: full safe migration
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS orders (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id     BIGINT NOT NULL,
+    status      VARCHAR(20) NOT NULL DEFAULT 'PENDING'
+                    CHECK (status IN ('PENDING', 'CONFIRMED', 'CANCELED')),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at  TIMESTAMPTZ NULL,
+    version     INT NOT NULL DEFAULT 1,
+    CONSTRAINT fk_orders_user_id FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+
+COMMIT;
+```
+
+**MySQL** — DDL causes implicit commit → transactions do NOT protect DDL:
+- Keep each migration as a single atomic logical change
+- Use `IF NOT EXISTS` / `IF EXISTS` for idempotency instead of transactions
+- Let migration tool (golang-migrate, Flyway) track execution state
+
+**Rules:**
+- NEVER mix DML + DDL in the same transaction on MySQL
+- On PostgreSQL failure: transaction rolls back automatically
+- On MySQL failure: idempotency guards allow safe retry
+
+### Zero-Downtime Strategy (CRITICAL) — Expand → Migrate → Contract
+
+```
+Step 1: Add new column (nullable)
+Step 2: Backfill data
+Step 3: Switch application to use new column
+Step 4: Remove old column (later, separate migration)
+```
+
+**DO NOT** rename columns directly or drop columns immediately.
+
+## Query Rules
+
+```sql
+-- FORBIDDEN
+SELECT *
+
+-- REQUIRED — explicit columns
+SELECT id, email, name FROM users WHERE deleted_at IS NULL
+
+-- FORBIDDEN (large tables)
+LIMIT 10 OFFSET 10000
+
+-- REQUIRED — Keyset Pagination
+WHERE id > :last_id ORDER BY id LIMIT 10
+```
+
+### Foreign Keys (REQUIRED)
+
+```sql
+FOREIGN KEY (user_id)
+REFERENCES users(id)
+ON DELETE <RESTRICT | CASCADE | SET NULL>  -- MUST explicitly define ON DELETE
+```
+
+## Schema Design Strategy
+
+- Default: 3NF. Denormalize ONLY if required by query performance.
+- Design based on access patterns, read/write ratio, data volume.
+- For large tables: time-based or hash-based partitioning.
+
+## Final Principles
+
+- Prefer clarity over brevity
+- Prefer explicit over implicit
+- Prefer safe schema over premature optimization
+- Design for real-world production systems

@@ -340,7 +340,7 @@ When verdict is APPROVED, create `reports/<unix_timestamp>_qa_<task-id>.md`:
 3. [Check the result]
 
 **Expected Result:**
-- HTTP status: 200 OK (or gRPC code: OK)
+- gRPC status: codes.OK
 - Response body: `{ "token": "...", "expires_in": 3600 }`
 - [Any other observable behavior]
 
@@ -354,8 +354,8 @@ When verdict is APPROVED, create `reports/<unix_timestamp>_qa_<task-id>.md`:
 1. [Step]
 
 **Expected Result:**
-- HTTP status: 401 Unauthorized
-- Error message: `"invalid credentials"` (NOT a detailed error)
+- gRPC status: codes.Unauthenticated
+- Error message: `"invalid credentials"` (NOT a detailed error, use status.Errorf)
 
 ---
 

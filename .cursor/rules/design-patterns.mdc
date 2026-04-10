@@ -1,0 +1,184 @@
+---
+description: Go design patterns: Repository, Adapter, Circuit Breaker, Worker Pool, and anti-patterns.
+globs: ["internal/**/*.go", "pkg/**/*.go"]
+alwaysApply: false
+---
+
+# Design Patterns for Go Backend
+
+Choose the right pattern for the problem. Do NOT force a pattern when not needed.
+Go prefers SIMPLICITY. If a pattern only adds a wrapper without adding value → skip.
+
+## Pattern Selection Guide
+
+| Situation | Pattern |
+|-----------|---------|
+| Creating objects with many variants | Factory Method |
+| Complex config with many options | Functional Options |
+| Data access for an entity | Repository (DEFAULT) |
+| Wrapping external service | Adapter (DEFAULT) |
+| Adding logging/metrics/auth | Decorator / Middleware |
+| Calling external API/service | Circuit Breaker (DEFAULT) |
+| Changing algorithm at runtime | Strategy |
+| One action triggers many side effects | Observer / Event Bus |
+| Batch/parallel processing with limits | Worker Pool |
+| Parallel calls collecting results | Fan-Out / Fan-In (errgroup) |
+| Data through multiple processing steps | Pipeline |
+| Injecting dependencies | Constructor Injection (DEFAULT) |
+
+## Apply by Default
+
+### Repository Pattern (every entity that touches the database)
+
+```go
+// service/user_service.go — CONSUMER defines interface
+type UserRepository interface {
+    FindByID(ctx context.Context, id string) (*domain.User, error)
+    Save(ctx context.Context, user *domain.User) error
+}
+
+// repository/user_postgres.go — PRODUCER returns struct
+type PostgresUserRepo struct { db *sql.DB }
+
+func NewPostgresUserRepo(db *sql.DB) *PostgresUserRepo {
+    return &PostgresUserRepo{db: db}
+}
+```
+
+### Constructor Injection (every dependency)
+
+```go
+func NewUserService(repo UserRepository, logger *zap.Logger) *UserService {
+    return &UserService{
+        repo:   repo,
+        logger: logger.With(zap.String("component", "UserService")),
+    }
+}
+```
+
+### Circuit Breaker (every external HTTP/gRPC call)
+
+```go
+import "github.com/sony/gobreaker/v2"
+
+cb := gobreaker.NewCircuitBreaker[*http.Response](gobreaker.Settings{
+    Name:        "payment-api",
+    MaxRequests: 3,
+    Interval:    10 * time.Second,
+    Timeout:     30 * time.Second,
+    ReadyToTrip: func(counts gobreaker.Counts) bool {
+        return counts.ConsecutiveFailures > 5
+    },
+})
+
+resp, err := cb.Execute(func() (*http.Response, error) {
+    return httpClient.Do(req)
+})
+```
+
+### Middleware / Decorator (cross-cutting concerns)
+
+```go
+func LoggingMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            start := time.Now()
+            next.ServeHTTP(w, r)
+            logger.Info("request", zap.String("method", r.Method), zap.Duration("duration", time.Since(start)))
+        })
+    }
+}
+```
+
+## Apply When Appropriate
+
+### Functional Options (object with many optional configs)
+
+```go
+type Option func(*Server)
+
+func WithPort(p int) Option         { return func(s *Server) { s.port = p } }
+func WithTimeout(t time.Duration) Option { return func(s *Server) { s.timeout = t } }
+
+func NewServer(opts ...Option) *Server {
+    s := &Server{port: 8080, timeout: 30 * time.Second}
+    for _, opt := range opts { opt(s) }
+    return s
+}
+```
+
+### Worker Pool (batch/parallel processing with limits)
+
+```go
+func WorkerPool(ctx context.Context, numWorkers int, jobs <-chan Job, results chan<- Result) {
+    var wg sync.WaitGroup
+    for i := 0; i < numWorkers; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            for {
+                select {
+                case job, ok := <-jobs:
+                    if !ok { return }
+                    results <- process(ctx, job)
+                case <-ctx.Done():
+                    return
+                }
+            }
+        }()
+    }
+    wg.Wait()
+    close(results)
+}
+```
+
+### Fan-Out / Fan-In (parallel calls with error collection)
+
+```go
+import "golang.org/x/sync/errgroup"
+
+g, ctx := errgroup.WithContext(ctx)
+results := make([]*Result, len(items))
+
+for i, item := range items {
+    i, item := i, item
+    g.Go(func() error {
+        res, err := process(ctx, item)
+        if err != nil {
+            return fmt.Errorf("process item %d: %w", i, err)
+        }
+        results[i] = res
+        return nil
+    })
+}
+if err := g.Wait(); err != nil { ... }
+```
+
+### Observer / Event Bus (one action → many side effects)
+
+```go
+type EventBus struct {
+    handlers map[EventType][]func(context.Context, Event) error
+    mu       sync.RWMutex
+}
+
+func (eb *EventBus) Subscribe(t EventType, h func(context.Context, Event) error) {
+    eb.mu.Lock(); defer eb.mu.Unlock()
+    eb.handlers[t] = append(eb.handlers[t], h)
+}
+
+// NOTE: For microservices, prefer NATS, Kafka, or RabbitMQ
+```
+
+## Anti-Patterns (FORBIDDEN)
+
+```
+FORBIDDEN: God struct (struct > 10 fields or > 7 methods)
+FORBIDDEN: Circular dependencies between packages
+FORBIDDEN: Global mutable state (use DI instead)
+FORBIDDEN: Interface pollution (interface with only 1 impl, no need for mocking)
+FORBIDDEN: Premature abstraction (pattern for only 1 use case)
+FORBIDDEN: Deep inheritance thinking (Go uses composition)
+FORBIDDEN: Empty interface{} when a concrete type can be used
+FORBIDDEN: Over-wrapping (adapter around adapter)
+```

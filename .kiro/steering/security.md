@@ -167,10 +167,17 @@ logger.Info("user", zap.String("ssn", user.SSN))   // FORBIDDEN
 ```go
 // REQUIRED: Rate limiting on authentication endpoints
 // REQUIRED: Rate limiting on API endpoints (per user/IP)
-// REQUIRED: Return 429 Too Many Requests with Retry-After header
+// REQUIRED: Return codes.ResourceExhausted when rate limit exceeded
+// RECOMMENDED: Include retry delay via gRPC error details
 
-// Recommended: token bucket or sliding window algorithm
-// Use: golang.org/x/time/rate or external middleware (e.g., chi-throttle)
+// Recommended algorithm: token bucket or sliding window
+// Use: golang.org/x/time/rate or gRPC interceptor
+
+st := status.New(codes.ResourceExhausted, "rate limit exceeded")
+ds, _ := st.WithDetails(&errdetails.RetryInfo{
+    RetryDelay: durationpb.New(retryAfter),
+})
+return nil, ds.Err()
 ```
 
 ## OWASP Top 10 (2025) Checklist

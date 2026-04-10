@@ -1,0 +1,186 @@
+---
+description: Security rules: input validation, SQL injection, JWT, cryptography, CORS, rate limiting, OWASP Top 10.
+globs: ["internal/**/*.go", "cmd/**/*.go"]
+alwaysApply: false
+---
+
+# Security Rules
+
+## Secure Coding Checklist
+
+Every code suggestion must pass:
+
+```
+- [ ] Input validation at every handler (go-playground/validator struct tags)
+- [ ] Parameterized queries — NO string concat SQL (even with GORM Raw)
+- [ ] JWT: explicit algorithm validation, expiry enforced, RS256/ES256 in production
+- [ ] NO hardcoded secrets — use env / vault / config
+- [ ] crypto/rand for security-sensitive random values (NOT math/rand)
+- [ ] json.Decoder with MaxBytesReader to prevent DoS
+- [ ] Context timeout on every external call (30s HTTP, 5s DB, 10s cache)
+- [ ] Goroutines always have cancellation mechanism + panic recovery
+- [ ] Passwords hashed with bcrypt (cost ≥ 12) or argon2
+- [ ] TLS 1.2+ for all external connections
+- [ ] No sensitive data in logs (passwords, tokens, PII)
+- [ ] Audit log for authentication events
+- [ ] CORS configured with specific origins (not "*" in prod)
+- [ ] Rate limiting on auth and API endpoints
+```
+
+## Input Validation (Handler Layer)
+
+```go
+type CreateUserRequest struct {
+    Email    string `json:"email" validate:"required,email,max=255"`
+    Name     string `json:"name" validate:"required,min=2,max=100"`
+    Password string `json:"password" validate:"required,min=8,max=72"`
+}
+
+// Limit request body
+r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
+
+// JSON with size limit + strict parsing
+decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+decoder.DisallowUnknownFields()
+if err := decoder.Decode(&req); err != nil {
+    // handle error
+}
+```
+
+## SQL Injection Prevention
+
+```go
+// SAFE
+db.Where("email = ?", email).First(&user)
+db.Raw("SELECT id, name FROM users WHERE id = ?", id).Scan(&user)
+
+// UNSAFE — FORBIDDEN
+db.Raw("SELECT * FROM users WHERE email = '" + email + "'")
+db.Raw(fmt.Sprintf("SELECT * FROM users WHERE id = %s", id))
+```
+
+## Authentication & JWT
+
+```go
+// Validate JWT algorithm explicitly
+token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+    if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+        return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+    }
+    return publicKey, nil
+})
+```
+
+- **REQUIRED**: Validate JWT algorithm (prevent "none" algorithm attack)
+- **REQUIRED**: Set and validate expiration (`exp` claim)
+- **REQUIRED**: Use RS256 or ES256 (asymmetric) for production
+- **REQUIRED**: bcrypt with cost ≥ 12 for password hashing
+- **FORBIDDEN**: HS256 with weak secrets
+- **FORBIDDEN**: JWT in URL query parameters
+- **FORBIDDEN**: Store sensitive data in JWT payload
+
+## Cryptography
+
+```go
+// CORRECT — secure random
+b := make([]byte, 32)
+if _, err := crypto_rand.Read(b); err != nil {
+    return err
+}
+
+// WRONG — FORBIDDEN
+token := fmt.Sprintf("%d", math_rand.Intn(1000000))
+```
+
+- **REQUIRED**: `crypto/rand` for security-sensitive random values
+- **REQUIRED**: bcrypt or argon2 for password hashing
+- **REQUIRED**: AES-256-GCM for symmetric encryption
+- **FORBIDDEN**: `math/rand` for security purposes
+- **FORBIDDEN**: MD5 or SHA1 for password hashing
+- **FORBIDDEN**: ECB mode for encryption
+
+## Context & Timeout
+
+```go
+// External call — ALWAYS with timeout
+ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+defer cancel()
+err := db.QueryRowContext(ctx, "SELECT id FROM users WHERE id = ?", id).Scan(&result)
+```
+
+## Goroutine Safety
+
+```go
+go func() {
+    defer func() {
+        if r := recover(); r != nil {
+            logger.Error("goroutine panic", zap.Any("error", r))
+        }
+    }()
+    select {
+    case <-ctx.Done():
+        return
+    case msg := <-ch:
+        process(msg)
+    }
+}()
+```
+
+## CORS
+
+```
+REQUIRED: Explicit allowed origins (not "*" in production)
+REQUIRED: Explicit allowed methods and headers
+REQUIRED: Credentials mode only with specific origins
+FORBIDDEN: Access-Control-Allow-Origin: * with credentials
+```
+
+## Rate Limiting
+
+```go
+// REQUIRED: Rate limiting on authentication endpoints
+// REQUIRED: Rate limiting on API endpoints (per user/IP)
+// REQUIRED: Return codes.ResourceExhausted when rate limit exceeded
+// RECOMMENDED: Include retry delay via gRPC error details
+// RECOMMENDED: Token bucket or sliding window algorithm
+
+st := status.New(codes.ResourceExhausted, "rate limit exceeded")
+ds, _ := st.WithDetails(&errdetails.RetryInfo{
+    RetryDelay: durationpb.New(retryAfter),
+})
+return nil, ds.Err()
+```
+
+## Security Scanning Toolchain
+
+```bash
+# MANDATORY
+gosec ./...
+govulncheck ./...
+
+# MANDATORY if installed
+semgrep --config=p/golang --config=p/owasp-top-ten ./...
+snyk test --all-projects
+snyk code test
+sonar-scanner   # Config: sonar-project.properties | Host: https://sonarcloud.io
+                # Requires: SONAR_TOKEN env var
+
+# Coverage gate
+go test ./... -coverprofile=coverage.out
+go tool cover -func=coverage.out | grep total   # MUST be >= 80%
+```
+
+## OWASP Top 10 (2025)
+
+```
+A01 Broken Access Control    --> RBAC, check permissions per endpoint
+A02 Cryptographic Failures   --> TLS, bcrypt, AES-GCM, no hardcoded keys
+A03 Injection                --> Parameterized queries, input validation
+A04 Insecure Design          --> Threat modeling, secure defaults
+A05 Security Misconfiguration--> No debug in prod, minimal permissions
+A06 Vulnerable Components    --> govulncheck + Snyk, regular dependency updates
+A07 Auth Failures            --> MFA, secure JWT, session management
+A08 Data Integrity Failures  --> Signed updates, secure deserialization
+A09 Logging Failures         --> Audit logs, monitoring, alerting
+A10 SSRF                     --> Validate URLs, block internal networks
+```

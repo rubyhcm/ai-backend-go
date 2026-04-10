@@ -333,8 +333,17 @@ go func() {
 ### Rate Limiting
 - Required on all authentication endpoints.
 - Required on all API endpoints (per user/IP).
-- Return `429 Too Many Requests` with `Retry-After` header.
+- Return `codes.ResourceExhausted` when rate limit exceeded.
+- Include retry delay via gRPC error details (`errdetails.RetryInfo` + `durationpb`).
 - Recommended: token bucket or sliding window algorithm.
+
+```go
+st := status.New(codes.ResourceExhausted, "rate limit exceeded")
+ds, _ := st.WithDetails(&errdetails.RetryInfo{
+    RetryDelay: durationpb.New(retryAfter),
+})
+return nil, ds.Err()
+```
 
 ### OWASP Top 10 (2025) Quick Reference
 
@@ -362,6 +371,13 @@ govulncheck ./...
 semgrep --config=p/golang --config=p/owasp-top-ten ./...
 snyk test --all-projects
 snyk code test
+sonar-scanner   # Config: sonar-project.properties at repo root
+                # Requires: SONAR_TOKEN env var
+                # Host: https://sonarcloud.io
+
+# Coverage gate (MUST be >= 80% overall)
+go test ./... -coverprofile=coverage.out
+go tool cover -func=coverage.out | grep total
 ```
 
 ---
@@ -559,6 +575,26 @@ return nil, status.Errorf(codes.NotFound, "resource not found")
 
 ---
 
+## Feature Implementation Workflow
+
+When asked to implement a new feature, follow this sequence:
+
+1. **Understand the domain** — What entities are involved? What are the business rules?
+2. **Define domain layer** — Create/update entities in `internal/domain/`
+3. **Define domain errors** — Add to `internal/domain/errors.go` if new error types needed
+4. **Write service interface** — Define repository interface in service file (consumer-side)
+5. **Implement service** — Business logic in `internal/service/`
+6. **Write service tests** — Table-driven tests with gomock; cover success + all error paths
+7. **Implement repository** — Data access in `internal/repository/`, implement the service's interface
+8. **Create migration** — SQL migration file for any schema changes
+9. **Define proto** — Add RPC methods to `.proto` file in `api/proto/`
+10. **Generate code** — Run `buf generate`
+11. **Implement gRPC handler** — In `internal/handler/`, embed `UnimplementedXxxServer`
+12. **Register handler** — In `cmd/api/main.go` DI wiring
+13. **Write handler tests** — Test request validation and error mapping
+
+---
+
 ## Dependency Injection
 
 ```go
@@ -580,9 +616,120 @@ userHandler := handler.NewUserHandler(userSvc)
 
 ## Database Rules
 
-- Migrations for all schema changes (`golang-migrate` or `goose`).
-- Transactions for multi-table operations.
+### Global Principles
+- **Consistency** — naming, structure, constraints across all tables.
+- **Explicitness** — no implicit assumptions.
+- **Backward compatibility** — support zero-downtime migrations.
+- **Safety first** — avoid destructive operations.
+- **Access pattern driven design** — optimize for real queries.
+
+### Target DBMS Awareness
+- **PostgreSQL**: use `TIMESTAMPTZ`, supports Partial Index, `gen_random_uuid()`, `COMMENT ON`.
+- **MySQL 8+**: use `TIMESTAMP`/`DATETIME`, NO Partial Index (use composite index workaround), inline column comments.
+
+### Table Requirements (MANDATORY for every table)
+
+**Primary Key:**
+```sql
+-- PostgreSQL
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY
+
+-- MySQL
+id BIGINT AUTO_INCREMENT PRIMARY KEY
+
+-- Distributed systems (optional)
+id UUID PRIMARY KEY
+```
+
+**Audit Fields:**
+```sql
+-- PostgreSQL
+created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+
+-- MySQL
+created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+```
+
+**Soft Delete (optional):**
+```sql
+deleted_at TIMESTAMP NULL   -- NOT is_deleted boolean
+-- All queries MUST include: WHERE deleted_at IS NULL
+```
+
+### Column Design Rules
+- Use `snake_case` naming.
+- Foreign keys: `<referenced_table_singular>_id` (e.g., `user_id`, `order_id`).
+- Columns are `NOT NULL` by default; only allow `NULL` if truly optional.
+- If table > 20 columns → evaluate vertical partitioning.
+
+### Indexing Strategy
+Create index only when column is used in `WHERE`, `JOIN`, or `ORDER BY`.
+Prefer high-selectivity columns; prefer composite indexes (follow leftmost prefix rule).
+
+**Soft Delete Optimization:**
+```sql
+-- PostgreSQL (Partial Index)
+CREATE INDEX idx_users_active ON users(email) WHERE deleted_at IS NULL;
+
+-- MySQL (Composite Index workaround)
+CREATE INDEX idx_users_email_deleted_at ON users(email, deleted_at);
+```
+
+### Unique Constraints
+```sql
+-- PostgreSQL (Soft Delete — Partial Unique Index)
+CREATE UNIQUE INDEX uk_email_active ON users(email) WHERE deleted_at IS NULL;
+
+-- MySQL
+UNIQUE KEY uk_email_deleted_at (email, deleted_at)
+```
+
+### Query Rules
+```sql
+-- FORBIDDEN
+SELECT *
+
+-- REQUIRED
+SELECT id, email, name FROM users WHERE deleted_at IS NULL
+
+-- FORBIDDEN (large tables)
+LIMIT 10 OFFSET 10000
+
+-- REQUIRED — Keyset Pagination
+WHERE id > last_id ORDER BY id LIMIT 10
+```
+
+### Migration Rules
+- Every migration MUST have a version (timestamp or incremental).
+- Use `IF NOT EXISTS` / `IF EXISTS` for idempotency.
+- Every `UP` MUST have a `DOWN`.
+- **NEVER** drop columns/tables without explicit instruction.
+
+**Zero-Downtime Strategy (CRITICAL) — Expand → Migrate → Contract:**
+1. Add new column (nullable)
+2. Backfill data
+3. Switch application to use new column
+4. Remove old column (later, in separate migration)
+- **DO NOT** rename columns directly or drop columns immediately.
+
+### Comments (MANDATORY)
+```sql
+-- PostgreSQL
+COMMENT ON TABLE users IS 'User information';
+COMMENT ON COLUMN users.email IS 'Unique email address, unique per active user';
+
+-- MySQL (inline)
+email VARCHAR(255) NOT NULL COMMENT 'Unique email address'
+```
+
+### Enum / Status Fields
+Prefer `VARCHAR + CHECK` or a lookup table over native ENUM for flexibility. Always document enum meanings via comments.
+
+### Connection & Transactions
 - Connection pooling configuration required.
+- Transactions for multi-table operations.
 - Parameterized queries / prepared statements always.
 - **FORBIDDEN**: Raw SQL string concatenation.
 - **FORBIDDEN**: Schema changes without migration files.

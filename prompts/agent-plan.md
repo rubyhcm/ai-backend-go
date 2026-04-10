@@ -74,7 +74,7 @@ You MUST generate these files in `.ai-agents/`:
 | Module | Test Type | Coverage Target | Key Test Cases |
 |--------|-----------|-----------------|----------------|
 | service/ | Unit | 85% | CRUD, validation, errors |
-| handler/ | Unit | 80% | HTTP status, request parsing |
+| handler/ | Unit | 80% | gRPC status codes, request validation |
 
 ## Security Considerations
 - [List relevant OWASP items and mitigations]

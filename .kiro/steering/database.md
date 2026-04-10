@@ -174,9 +174,81 @@ migrations/
 ### Rules
 
 - Every UP migration MUST have a DOWN (rollback)
-- Use `IF NOT EXISTS` / `IF EXISTS` for idempotency
+- Use `IF NOT EXISTS` / `IF EXISTS` for idempotency — every migration MUST be safe to re-run
 - DO NOT drop columns/tables without explicit instruction
 - DO NOT destructively modify data in migrations without explicit instruction
+
+### Idempotency Patterns
+
+```sql
+-- Tables
+CREATE TABLE IF NOT EXISTS users (...);
+
+-- Columns (PostgreSQL)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20) NULL;
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- Drop
+DROP TABLE IF EXISTS legacy_users;
+ALTER TABLE users DROP COLUMN IF EXISTS old_field;  -- PostgreSQL only
+
+-- Constraints (PostgreSQL)
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_orders_user_id'
+  ) THEN
+    ALTER TABLE orders ADD CONSTRAINT fk_orders_user_id
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;
+  END IF;
+END $$;
+```
+
+### Transaction Safety (CRITICAL)
+
+**PostgreSQL** — supports transactional DDL, ALWAYS wrap in `BEGIN/COMMIT`:
+
+```sql
+BEGIN;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20) NULL;
+CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+
+COMMIT;
+```
+
+**MySQL** — DDL causes implicit commit, transactions do NOT protect DDL:
+- Keep each migration file as a single atomic logical change
+- Rely on migration tool (golang-migrate, Flyway) to track execution state
+- Ensure idempotency via `IF NOT EXISTS` / `IF EXISTS` instead of transactions
+
+**Rules:**
+- NEVER mix DML + DDL in the same transaction on MySQL
+- On failure in PostgreSQL: automatic ROLLBACK via transaction
+- On failure in MySQL: migration must be idempotent to safely retry
+
+### DOWN Migration Example
+
+```sql
+-- DOWN must exactly reverse UP
+-- PostgreSQL
+BEGIN;
+DROP TABLE IF EXISTS orders;
+COMMIT;
+
+-- MySQL
+DROP TABLE IF EXISTS orders;
+```
+
+### Migration Checklist
+
+Before committing any migration file:
+- [ ] Wrapped in `BEGIN/COMMIT` (PostgreSQL)
+- [ ] All `CREATE` use `IF NOT EXISTS`
+- [ ] All `DROP` use `IF EXISTS`
+- [ ] DOWN migration exists and reverses UP exactly
+- [ ] No destructive data changes without explicit instruction
 
 ### Zero-Downtime Strategy (CRITICAL)
 

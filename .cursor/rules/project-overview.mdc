@@ -1,0 +1,48 @@
+---
+description: Project overview, tech stack, and core principles. Always apply for any Go file in this repo.
+globs: ["**/*.go", "**/*.proto", "**/go.mod"]
+alwaysApply: true
+---
+
+# Project Overview
+
+This is a **Go backend** project using **Clean Architecture** and **gRPC-first** API design.
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Language | Go 1.21+ |
+| API Protocol | gRPC (primary) + HTTP (health/metrics only) |
+| Protocol Buffers | proto3, `buf` tool for code generation |
+| Database | PostgreSQL (primary) or MySQL 8+ |
+| ORM/Query | GORM |
+| Logging | `go.uber.org/zap` (structured logging) |
+| Configuration | `github.com/spf13/viper` |
+| Testing | testify, gomock, testcontainers-go |
+| Linting | golangci-lint |
+
+## Core Principles (Non-Negotiable)
+
+1. **Clean Architecture** — Strict layer separation. Domain knows nothing. Handler knows only service.
+2. **gRPC-First** — All business APIs via gRPC + protobuf. HTTP only for `/healthz` and `/metrics`.
+3. **No Global State** — Constructor injection everywhere. Zero `var` singletons for business dependencies.
+4. **Error Wrapping** — Always `fmt.Errorf("%w", err)`. Never swallow errors silently.
+5. **Context Propagation** — Every service/repo method takes `ctx context.Context` as first arg.
+6. **Component Logger** — Create scoped logger once in constructor: `logger.With(zap.String("component", "..."))`.
+7. **Config via Viper** — No magic numbers, no hardcoded timeouts, no hardcoded secrets.
+8. **Table-Driven Tests** — All tests use `t.Run()`. Every case asserts both value and error.
+9. **Parameterized Queries** — No SQL string concatenation. Ever.
+10. **Zero-Downtime Migrations** — Expand → Migrate → Contract pattern for all schema changes.
+
+## What NOT To Do
+
+- Do NOT put business logic in gRPC handlers — delegate to service layer
+- Do NOT define interfaces in `domain/` and import them back (Java-style anti-pattern)
+- Do NOT use `SELECT *` in any query
+- Do NOT hardcode timeouts, limits, or configuration values
+- Do NOT log sensitive data (passwords, tokens, PII, secrets)
+- Do NOT create goroutines without a cancellation mechanism
+- Do NOT write tests without assertions (coverage trap)
+- Do NOT use `OFFSET` pagination for large tables — use keyset pagination
+- Do NOT rename or drop database columns in a single migration — use Expand-Migrate-Contract

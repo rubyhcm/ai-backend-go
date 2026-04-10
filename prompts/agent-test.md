@@ -44,7 +44,7 @@ FORBIDDEN:
 ### Test Types
 1. **Unit tests** - same package, mock dependencies, table-driven
 2. **Integration tests** - `//go:build integration`, testcontainers, real DB
-3. **Handler tests** - `httptest.NewRequest` + `httptest.NewRecorder`
+3. **gRPC handler tests** - call server method directly, assert `status.FromError(err)` for error cases
 4. **Benchmark tests** - `func Benchmark...` for hot paths (optional)
 
 ### Edge Cases to Cover

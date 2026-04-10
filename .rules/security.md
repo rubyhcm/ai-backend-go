@@ -155,8 +155,16 @@ FORBIDDEN: Expose stack traces to end users
 ```
 REQUIRED: Rate limiting on authentication endpoints
 REQUIRED: Rate limiting on API endpoints (per user/IP)
-REQUIRED: Return 429 Too Many Requests with Retry-After header
+REQUIRED: Return gRPC status codes.ResourceExhausted when rate limit exceeded
 RECOMMENDED: Use token bucket or sliding window algorithm
+RECOMMENDED: Include retry delay in gRPC status details (google.golang.org/grpc/status + errdetails)
+
+Example:
+  st := status.New(codes.ResourceExhausted, "rate limit exceeded")
+  ds, _ := st.WithDetails(&errdetails.RetryInfo{
+      RetryDelay: durationpb.New(retryAfter),
+  })
+  return nil, ds.Err()
 ```
 
 ## OWASP Top 10 (2025) Quick Reference

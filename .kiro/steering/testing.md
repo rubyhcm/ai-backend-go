@@ -194,30 +194,43 @@ IMPORTANT: Coverage % is a guideline, not the goal.
 Quality of assertions matters MORE than coverage number.
 ```
 
-## HTTP Handler Testing
+## gRPC Handler Testing
 
 ```go
-func TestUserHandler_Create(t *testing.T) {
+func TestUserServer_Create(t *testing.T) {
     tests := []struct {
-        name       string
-        body       string
-        setup      func(*MockUserService)
-        wantStatus int
+        name     string
+        req      *pb.CreateUserRequest
+        setup    func(*MockUserUsecase)
+        wantResp *pb.CreateUserResponse
+        wantCode codes.Code
     }{
         {
             name: "success",
-            body: `{"email":"test@example.com","name":"Test"}`,
-            setup: func(m *MockUserService) {
+            req:  &pb.CreateUserRequest{Email: "test@example.com", Name: "Test"},
+            setup: func(m *MockUserUsecase) {
                 m.EXPECT().Create(gomock.Any(), gomock.Any()).
                     Return(&domain.User{ID: "1", Email: "test@example.com"}, nil)
             },
-            wantStatus: http.StatusCreated,
+            wantCode: codes.OK,
         },
         {
-            name:       "invalid json",
-            body:       `{invalid}`,
-            setup:      func(m *MockUserService) {},
-            wantStatus: http.StatusBadRequest,
+            name: "invalid argument - empty email",
+            req:  &pb.CreateUserRequest{Email: "", Name: "Test"},
+            setup: func(m *MockUserUsecase) {
+                m.EXPECT().Create(gomock.Any(), gomock.Any()).
+                    Return(nil, domain.ErrInvalid)
+            },
+            wantCode: codes.InvalidArgument,
+        },
+        {
+            name: "already exists",
+            req:  &pb.CreateUserRequest{Email: "exists@example.com", Name: "Test"},
+            setup: func(m *MockUserUsecase) {
+                m.EXPECT().Create(gomock.Any(), gomock.Any()).
+                    Return(nil, domain.ErrAlreadyExists)
+            },
+            wantCode: codes.AlreadyExists,
         },
     }
 
@@ -226,17 +239,21 @@ func TestUserHandler_Create(t *testing.T) {
             ctrl := gomock.NewController(t)
             defer ctrl.Finish()
 
-            svc := NewMockUserService(ctrl)
-            tt.setup(svc)
+            uc := NewMockUserUsecase(ctrl)
+            tt.setup(uc)
 
-            h := handler.NewUserHandler(svc)
-            req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(tt.body))
-            req.Header.Set("Content-Type", "application/json")
-            rec := httptest.NewRecorder()
+            srv := NewUserServer(uc, zap.NewNop())
+            resp, err := srv.Create(context.Background(), tt.req)
 
-            h.Create(rec, req)
-
-            assert.Equal(t, tt.wantStatus, rec.Code)
+            if tt.wantCode != codes.OK {
+                require.Error(t, err)
+                st, ok := status.FromError(err)
+                require.True(t, ok)
+                assert.Equal(t, tt.wantCode, st.Code())
+                return
+            }
+            require.NoError(t, err)
+            assert.NotNil(t, resp)
         })
     }
 }

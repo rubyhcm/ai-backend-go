@@ -1,0 +1,165 @@
+---
+description: Go coding conventions: naming, error handling, context, logging, concurrency, configuration.
+globs: ["**/*.go"]
+alwaysApply: false
+---
+
+# Go Code Conventions
+
+## Naming
+
+```
+CamelCase for exported, camelCase for unexported
+No "I" prefix for interfaces: UserRepository, NOT IUserRepository
+Error variables prefixed with Err: ErrNotFound, ErrInvalid
+Constructors: NewXxx(deps...) *Xxx
+Package names: lowercase, single word, no underscores
+Receiver names: short (1-2 chars), consistent (s for service, r for repo)
+Acronyms fully capitalized: HTTPHandler, JSONParser, URLPath
+```
+
+## Error Handling
+
+```go
+// CORRECT
+return fmt.Errorf("userService.GetByID: %w", err)
+if errors.Is(err, domain.ErrNotFound) { ... }
+if errors.As(err, &target) { ... }
+
+// WRONG
+return err                    // loses context
+if err.Error() == "not found" // string comparison
+```
+
+Custom domain errors (defined in `internal/domain/errors.go`):
+```go
+var (
+    ErrNotFound     = errors.New("not found")
+    ErrAlreadyExists = errors.New("already exists")
+    ErrInvalid      = errors.New("invalid")
+    ErrUnauthorized = errors.New("unauthorized")
+)
+```
+
+- **FORBIDDEN**: Return `errors.New(...)` without wrapping context
+- **FORBIDDEN**: Silent error swallowing (`_, err := ...; // ignore err`)
+- **FORBIDDEN**: `panic()` in library/service code (only in `main` or `init`)
+
+## Context
+
+```go
+// REQUIRED: ctx as FIRST parameter
+func (s *UserService) GetByID(ctx context.Context, id string) (*domain.User, error)
+func (r *PostgresUserRepo) FindByID(ctx context.Context, id string) (*domain.User, error)
+
+// REQUIRED: context timeout for external calls
+ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+defer cancel()
+
+// Default timeouts (from config — never hardcode)
+// HTTP: 30s | DB: 5s | Cache: 10s
+
+// FORBIDDEN
+context.Background() // inside service/repository — use the passed ctx
+```
+
+## Logging (zap)
+
+```go
+// REQUIRED: Component-scoped child logger in constructor
+func NewUserService(repo UserRepository, logger *zap.Logger) *UserService {
+    return &UserService{
+        repo:   repo,
+        logger: logger.With(zap.String("component", "UserService")),
+    }
+}
+
+// Then use s.logger everywhere — "component" is auto-appended
+s.logger.Info("creating user", zap.String("user_id", id))
+s.logger.Error("failed to create user", zap.Error(err))
+
+// gRPC servers use PascalCase: "AuthServer"
+// Services/usecases use snake_case: "auth_usecase"
+```
+
+- **FORBIDDEN**: Storing raw logger without `.With()` in constructors
+- **FORBIDDEN**: Adding `zap.String("component", ...)` inline on every log call
+- **FORBIDDEN**: `fmt.Println` for logging
+- **FORBIDDEN**: Log sensitive data (passwords, tokens, PII)
+
+## Configuration (Viper)
+
+```go
+// BAD — magic number
+time.Sleep(5 * time.Second)
+maxRetries := 3
+
+// GOOD — from config
+time.Sleep(cfg.Auth.TokenRefreshInterval)
+maxRetries := cfg.Service.MaxRetries
+```
+
+- All configurable values go in `configs/config.yaml` loaded via Viper
+- Config struct fields MUST have `mapstructure` tags
+- Separate configs per environment (dev, staging, prod)
+- Secrets via environment variables (override config.yaml values)
+- **FORBIDDEN**: Hardcoded secrets, API keys, URLs, ports, timeouts, limits
+
+## Structs & Functions
+
+```
+Structs with > 3 required fields use NewXxx() constructor
+Functional Options for > 2 optional configs
+Methods should not exceed 50 lines (extract helpers)
+Max 3 levels of nesting (if/for) — use early return
+FORBIDDEN: Struct with > 10 fields (split into embedded structs)
+FORBIDDEN: Function with > 5 parameters (use options struct)
+```
+
+## Interfaces (Go Idiom: "Accept interfaces, return structs")
+
+```
+Interface defined at CONSUMER (service/ defines repo interface)
+Producer (repository/) returns concrete struct
+Small interfaces (1-3 methods), split if > 5 methods
+FORBIDDEN: Interface defined in domain/ then imported back (Java-style)
+FORBIDDEN: Interface with only 1 implementation and no mock needed
+```
+
+## Concurrency
+
+```go
+// REQUIRED: goroutine must have cancellation
+go func() {
+    defer func() {
+        if r := recover(); r != nil {
+            logger.Error("goroutine panic", zap.Any("error", r))
+        }
+    }()
+    select {
+    case <-ctx.Done():
+        return
+    case msg := <-ch:
+        process(msg)
+    }
+}()
+
+// REQUIRED: errgroup for parallel operations
+g, ctx := errgroup.WithContext(ctx)
+for i, item := range items {
+    i, item := i, item
+    g.Go(func() error {
+        result, err := process(ctx, item)
+        if err != nil {
+            return fmt.Errorf("process item %d: %w", i, err)
+        }
+        results[i] = result
+        return nil
+    })
+}
+if err := g.Wait(); err != nil { ... }
+
+// FORBIDDEN: goroutine without context or done channel
+// FORBIDDEN: unbounded goroutine spawning (use worker pool)
+// FORBIDDEN: shared state without synchronization
+```
