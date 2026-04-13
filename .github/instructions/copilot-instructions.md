@@ -167,6 +167,8 @@ time.Sleep(cfg.Auth.TokenRefreshInterval)
 ```
 
 ### Logging
+
+**Component Logger Pattern:**
 - Use `zap` logger.
 - Every struct that logs must create a **child logger** in its constructor with a `"component"` field:
   ```go
@@ -182,6 +184,53 @@ time.Sleep(cfg.Auth.TokenRefreshInterval)
 - **FORBIDDEN**: Storing raw logger without `.With()` in constructors.
 - **FORBIDDEN**: Adding `zap.String("component", ...)` inline on every log call instead of in the constructor.
 - Never log sensitive data (passwords, tokens, PII).
+
+**Log Classification (MANDATORY):** Every log statement MUST belong to one of:
+1. `ASSERTION_CHECK` — input/security/data-invariant validation failure
+2. `RETURN_VALUE_CHECK` — err != nil, nil unexpected, external call failure
+3. `EXCEPTION` — unhandled/propagated exception, DB/network/auth error
+4. `LOGIC_BRANCH` — rare/unexpected branch, fallback, feature flag decision
+5. `OBSERVING_POINT` — request/job/transaction start & end
+
+**Logging Decision Engine:**
+```
+IF (unexpected OR high-impact OR hard-to-debug)  → MUST LOG
+ELSE IF (important state / decision point)       → SHOULD LOG
+ELSE                                             → DO NOT LOG
+```
+
+**Priority — log these first:**
+1. `EXCEPTION` (catch blocks) — 🚨 highest debug value
+2. `RETURN_VALUE_CHECK` (err != nil) — ⚠️ hidden failures without this
+
+**Decision Matrix:**
+```
+Critical + Unhandled   → ERROR (MUST)
+Recoverable + Retry    → WARN
+Important State        → INFO
+High-frequency trivial → NO LOG
+```
+
+**Error Handling + Logging Rule:**
+- If error is returned → **MUST LOG OR explicitly delegate** to upper layer.
+- If delegated → **DO NOT log here** (avoid duplication).
+- **WRONG**: `if err != nil { return fmt.Errorf("get user: %w", err) }` ← no log
+- **CORRECT**: log the error, then return the wrapped error.
+
+**Anti-patterns (STRICTLY FORBIDDEN):**
+- ❌ Blind logging: `log("start function")` / `log("end function")`
+- ❌ Missing error log: `if err != nil { return err }` with no log anywhere
+- ❌ Duplicate logs: same error logged at multiple layers
+- ❌ Sensitive data: password, token, full PII
+
+**Log density:** High-frequency paths → use sampling (log only 1/N requests).
+
+**Checklist before finishing code:**
+- [ ] All exceptions logged or delegated
+- [ ] All `err != nil` paths handled
+- [ ] No duplicate logs across layers
+- [ ] No sensitive data leaked
+- [ ] Log messages are meaningful (not generic)
 
 ### Functions & Structs
 - Keep methods under 50 lines; extract helpers otherwise.

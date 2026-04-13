@@ -102,7 +102,9 @@ FORBIDDEN: Struct with > 10 fields (split into embedded structs)
 FORBIDDEN: Function with > 5 parameters (use options struct)
 ```
 
-## Logging (Mandatory Component Pattern)
+## Logging (Mandatory Component Pattern + Architecture V3)
+
+### Component Logger Pattern
 
 ```go
 // REQUIRED: Use zap for structured logging
@@ -129,6 +131,132 @@ logger.Info("msg", zap.String("component", "UserService"), ...) // repeated on e
 s.logger = logger  // storing raw logger without .With() in constructor
 fmt.Println("debug")                                            // no structured logging
 s.logger.Info("user created", zap.String("password", pw))      // log sensitive data
+```
+
+### Log Classification (MANDATORY)
+
+```
+Every log statement MUST belong to one category:
+  1. ASSERTION_CHECK   — input/security/data-invariant validation failure
+  2. RETURN_VALUE_CHECK — err != nil, nil unexpected, external call failure
+  3. EXCEPTION         — unhandled/propagated exceptions, DB/network/auth errors
+  4. LOGIC_BRANCH      — rare/unexpected branch, fallback, feature flag decision
+  5. OBSERVING_POINT   — request/job/transaction start & end
+```
+
+### Logging Decision Engine
+
+```
+FOR each potential log position:
+
+IF (unexpected OR high-impact OR hard-to-debug)  → MUST LOG
+ELSE IF (important state / decision point)       → SHOULD LOG
+ELSE                                             → DO NOT LOG
+```
+
+### Priority Enforcement
+
+```
+Highest priority (add logs here first):
+  1. EXCEPTION (catch blocks)
+  2. RETURN_VALUE_CHECK (err != nil paths)
+
+Reason: lowest real-world coverage (8–42%), highest debugging value
+```
+
+### Rules per Category
+
+```
+RETURN_VALUE_CHECK ⚠️:
+  MUST:   err != nil, nil unexpected, external call failure, retry triggered
+  SHOULD: external API response (optional sampling)
+  NEVER:  pure function return, simple getter
+
+EXCEPTION 🚨:
+  MUST:   exception not fully handled / propagated, DB/network/auth/payment error
+  SHOULD: retryable exception (include retry_count)
+  NEVER:  fully handled + no side effect
+
+LOGIC_BRANCH:
+  MUST:   rare/unexpected branch, fallback logic, feature flag decision
+  SHOULD: business decision (approve/reject)
+  NEVER:  trivial if/else
+
+OBSERVING_POINT:
+  MUST:   request/job/transaction start & end
+  SHOULD: important state (user_id, request_id, latency)
+  NEVER:  repetitive debug info
+
+ASSERTION_CHECK:
+  MUST:   input validation failure, security failure, data invariant violation
+  NEVER:  assertions guaranteed by tests
+```
+
+### Decision Matrix
+
+```
+Critical + Unhandled   → ERROR (MUST)
+Recoverable + Retry    → WARN
+Important State        → INFO
+High-frequency trivial → NO LOG
+```
+
+### Error Handling + Logging Rule
+
+```go
+// IF error is returned: MUST LOG OR delegate to upper layer
+// IF delegated: DO NOT log here (avoid duplication)
+
+// WRONG — missing log:
+if err != nil {
+    return fmt.Errorf("get user: %w", err)
+}
+
+// CORRECT — log then delegate:
+if err != nil {
+    s.logger.Error("failed to get user", zap.String("user_id", id), zap.Error(err))
+    return fmt.Errorf("get user: %w", err)
+}
+
+// CORRECT — delegate intentionally (upper layer will log):
+// return fmt.Errorf("get user: %w", err)  // only if caller always logs
+```
+
+### Log Format
+
+```json
+{
+  "level": "ERROR | WARN | INFO",
+  "category": "EXCEPTION | RETURN_VALUE_CHECK | ASSERTION_CHECK | LOGIC_BRANCH | OBSERVING_POINT",
+  "message": "clear and specific message",
+  "context": { "request_id": "...", "trace_id": "...", "user_id": "...", "retry_count": 0 }
+}
+```
+
+### Anti-Patterns (STRICTLY FORBIDDEN)
+
+```
+❌ Blind logging:     log("start function") / log("end function")
+❌ Missing error log: if err != nil { return err }  // no log anywhere
+❌ Duplicate logs:    same error logged at multiple layers
+❌ Sensitive data:    password, token, full PII
+```
+
+### Log Density Control
+
+```
+High-frequency paths (loops, hot APIs) → use sampling (log only 1/N requests)
+```
+
+### Validation Checklist (Before Finishing Code)
+
+```
+[ ] All exceptions logged or delegated
+[ ] All err != nil paths handled
+[ ] No duplicate logs across layers
+[ ] No sensitive data leaked
+[ ] Log messages are meaningful (not generic)
+[ ] High-value areas (exception, return-check) covered
 ```
 
 ## Configuration

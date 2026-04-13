@@ -99,14 +99,12 @@ FORBIDDEN: Function with > 5 parameters (use options struct)
 
 ## Logging
 
+### Component Logger Pattern
+
 ```
 REQUIRED: Structured logging (zap)
 REQUIRED: Log levels: Debug, Info, Warn, Error
 REQUIRED: Include context fields: request_id, user_id, trace_id
-REQUIRED: Every log statement MUST include a "component" field as prefix
-          so logs can be filtered/searched by component name.
-          Format: logger.Info("message", zap.String("component", "PartnerAuth"), ...)
-          Or use a child logger: log = logger.With(zap.String("component", "PartnerAuth"))
 REQUIRED: Use the child logger pattern — create component logger ONCE in constructor:
           func NewXxxServer(..., logger *zap.Logger) *XxxServer {
               return &XxxServer{
@@ -120,6 +118,134 @@ FORBIDDEN: Adding zap.String("component", ...) inline on every log call instead 
 FORBIDDEN: fmt.Println for logging
 FORBIDDEN: Log sensitive data (passwords, tokens, PII)
 FORBIDDEN: Bare log statements without component field
+```
+
+### Log Classification (MANDATORY)
+
+```
+Every log statement MUST belong to one category:
+  1. ASSERTION_CHECK   — input/security/data-invariant validation failure
+  2. RETURN_VALUE_CHECK — err != nil, nil unexpected, external call failure
+  3. EXCEPTION         — unhandled/propagated exceptions, DB/network/auth errors
+  4. LOGIC_BRANCH      — rare/unexpected branch, fallback, feature flag decision
+  5. OBSERVING_POINT   — request/job/transaction start & end
+```
+
+### Logging Decision Engine
+
+```
+FOR each potential log position:
+
+IF (unexpected OR high-impact OR hard-to-debug)
+    → MUST LOG
+
+ELSE IF (important state / decision point)
+    → SHOULD LOG
+
+ELSE
+    → DO NOT LOG
+```
+
+### Priority Enforcement (HIGH PRIORITY)
+
+```
+Agent MUST prioritize adding logs to:
+  1. EXCEPTION (catch blocks)        — lowest real-world coverage, highest debug value
+  2. RETURN_VALUE_CHECK (err != nil) — missing error logs hide failures silently
+```
+
+### Detailed Rules per Category
+
+```
+ASSERTION_CHECK:
+  MUST LOG:  input validation failure, security validation failure, data invariant violation
+  DO NOT LOG: internal assertions already guaranteed by tests
+
+RETURN_VALUE_CHECK ⚠️:
+  MUST LOG:   err != nil, nil/null unexpected, external call failure, retry triggered
+  SHOULD LOG: external API response (optional sampling)
+  DO NOT LOG: pure function return, simple getter
+
+EXCEPTION 🚨:
+  MUST LOG:   exception not fully handled, exception propagated upward,
+              DB / network / auth / payment error
+  SHOULD LOG: retryable exception (include retry_count)
+  DO NOT LOG: fully handled + no side effect
+
+LOGIC_BRANCH:
+  MUST LOG:   rare/unexpected branch, fallback logic, feature flag decision
+  SHOULD LOG: business decision (approve/reject)
+  DO NOT LOG: trivial if/else
+
+OBSERVING_POINT:
+  MUST LOG:   request start/end, job start/end, transaction boundary
+  SHOULD LOG: important state (user_id, request_id, latency)
+  DO NOT LOG: repetitive debug info
+```
+
+### Decision Matrix
+
+```
+Critical + Unhandled   → ERROR log (MUST)
+Recoverable + Retry    → WARN log
+Important State        → INFO log
+High-frequency trivial → NO LOG
+```
+
+### Log Format
+
+```json
+{
+  "level": "ERROR | WARN | INFO",
+  "category": "EXCEPTION | RETURN_VALUE_CHECK | ASSERTION_CHECK | LOGIC_BRANCH | OBSERVING_POINT",
+  "message": "clear and specific message",
+  "context": {
+    "request_id": "...",
+    "trace_id": "...",
+    "user_id": "...",
+    "function": "...",
+    "service": "...",
+    "retry_count": 0
+  }
+}
+```
+
+### Error Handling + Logging Rule
+
+```
+IF error is returned:
+    → MUST LOG OR explicitly delegate logging to upper layer
+
+IF delegated:
+    → DO NOT log here (avoid duplication)
+```
+
+### Log Density Control
+
+```
+High-frequency paths (loops, hot APIs):
+    → use sampling OR aggregated logging (log only 1/N requests)
+```
+
+### Anti-Patterns (STRICTLY FORBIDDEN)
+
+```
+❌ Blind logging:        log("start function") / log("end function")
+❌ Missing error log:    if err != nil { return err }  // no log
+❌ Duplicate logging:    same error logged at multiple layers
+❌ Logging sensitive:    password, token, full PII
+```
+
+### Agent Validation Checklist
+
+```
+Before finishing code, verify:
+[ ] All exceptions are logged or delegated
+[ ] All err != nil paths are handled
+[ ] No duplicate logs across layers
+[ ] No sensitive data leaked
+[ ] Log messages are meaningful (not generic)
+[ ] High-value areas (exception, return-check) are covered
 ```
 
 ## Configuration

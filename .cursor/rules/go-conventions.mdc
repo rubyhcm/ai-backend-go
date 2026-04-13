@@ -63,7 +63,9 @@ defer cancel()
 context.Background() // inside service/repository — use the passed ctx
 ```
 
-## Logging (zap)
+## Logging (zap + Architecture V3)
+
+### Component Logger Pattern
 
 ```go
 // REQUIRED: Component-scoped child logger in constructor
@@ -86,6 +88,108 @@ s.logger.Error("failed to create user", zap.Error(err))
 - **FORBIDDEN**: Adding `zap.String("component", ...)` inline on every log call
 - **FORBIDDEN**: `fmt.Println` for logging
 - **FORBIDDEN**: Log sensitive data (passwords, tokens, PII)
+
+### Log Classification (MANDATORY)
+
+Every log statement MUST belong to one category:
+
+```
+1. ASSERTION_CHECK    — input/security/data-invariant validation failure
+2. RETURN_VALUE_CHECK — err != nil, nil unexpected, external call failure
+3. EXCEPTION          — unhandled/propagated exceptions, DB/network/auth errors
+4. LOGIC_BRANCH       — rare/unexpected branch, fallback, feature flag decision
+5. OBSERVING_POINT    — request/job/transaction start & end
+```
+
+### Logging Decision Engine
+
+```
+IF (unexpected OR high-impact OR hard-to-debug)  → MUST LOG
+ELSE IF (important state / decision point)       → SHOULD LOG
+ELSE                                             → DO NOT LOG
+```
+
+### Priority: Log These First
+
+```
+1. EXCEPTION (catch blocks)          — 🚨 highest debug value
+2. RETURN_VALUE_CHECK (err != nil)   — ⚠️ hidden failures without this
+```
+
+### Decision Matrix
+
+```
+Critical + Unhandled   → ERROR (MUST)
+Recoverable + Retry    → WARN
+Important State        → INFO
+High-frequency trivial → NO LOG
+```
+
+### Rules per Category
+
+```go
+// RETURN_VALUE_CHECK ⚠️
+// MUST:   err != nil, nil unexpected, external call failure, retry triggered
+if err != nil {
+    s.logger.Error("failed to fetch order", zap.String("order_id", id), zap.Error(err))
+    return fmt.Errorf("fetch order: %w", err)
+}
+
+// EXCEPTION 🚨
+// MUST:   not fully handled / propagated, DB/network/auth/payment error
+// SHOULD: retryable (include retry_count field)
+// NEVER:  fully handled + no side effect
+
+// LOGIC_BRANCH
+// MUST:   rare/unexpected branch, fallback, feature flag
+// NEVER:  trivial if/else
+
+// OBSERVING_POINT
+// MUST:   request/job/transaction start & end
+// SHOULD: user_id, request_id, latency
+// NEVER:  repetitive debug info
+```
+
+### Error Handling + Logging Rule
+
+```go
+// Rule: Log ONCE per error — either here or delegate to upper layer, not both.
+
+// WRONG — no log anywhere:
+if err != nil { return fmt.Errorf("get user: %w", err) }
+
+// CORRECT — log here:
+if err != nil {
+    s.logger.Error("get user failed", zap.String("id", id), zap.Error(err))
+    return fmt.Errorf("get user: %w", err)
+}
+```
+
+### Anti-Patterns (STRICTLY FORBIDDEN)
+
+```
+❌ Blind logging:     log("start function") / log("end function")
+❌ Missing error log: if err != nil { return err }  // no log anywhere
+❌ Duplicate logs:    same error logged at multiple layers
+❌ Sensitive data:    password, token, full PII
+```
+
+### Log Density Control
+
+```
+High-frequency paths (loops, hot APIs) → sampling (log only 1/N requests)
+```
+
+### Validation Checklist
+
+```
+[ ] All exceptions logged or delegated
+[ ] All err != nil paths handled
+[ ] No duplicate logs across layers
+[ ] No sensitive data leaked
+[ ] Log messages are meaningful (not generic)
+[ ] Exception + return-check areas covered
+```
 
 ## Configuration (Viper)
 
