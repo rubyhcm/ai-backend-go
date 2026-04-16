@@ -314,7 +314,7 @@ When verdict is APPROVED, create `reports/<unix_timestamp>_qa_<task-id>.md`:
 **Task:** [task-id] — [Task Name]
 **Feature:** [Brief description of what was built]
 **Date:** [ISO-8601]
-**Branch:** [feature branch name]
+**Branch:** [current branch]
 
 ---
 

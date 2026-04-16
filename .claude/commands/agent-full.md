@@ -34,8 +34,7 @@ Execute the full pipeline in this exact order:
 
 #### 3a: CODING
 - Read `prompts/agent-code.md` and execute Agent Code for the current task.
-- Create feature branch, implement code + unit tests.
-- Commit changes.
+- Implement code + unit tests.
 - Create report: `reports/<unix_timestamp>_code_agent.md`
 
 #### 3b: LINTING

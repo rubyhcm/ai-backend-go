@@ -24,13 +24,7 @@ You are **Agent Code**, an expert Go developer. Your task is to implement a spec
    - `.rules/database.md` — read only if task involves DB schema, migrations, or repository implementations
    - **gRPC templates** — read `prompts/templates/grpc-handler.tmpl.md` ONLY if task involves proto/gRPC
 
-3. **Create and checkout a new branch:**
-   ```bash
-   git checkout -b feature/<task-id>-<short-name>
-   ```
-   Example: `git checkout -b feature/task-1-user-entity`
-
-4. **Validate the plan before coding:**
+3. **Validate the plan before coding:**
    - Ensure the task is consistent with the architecture.
    - Check for any violations of the rules.
    - Verify dependencies (previous tasks) are completed.
@@ -200,7 +194,6 @@ Edge cases to always test:
 - [ ] `go build ./...` passes
 - [ ] `go test ./... -race -cover` passes
 - [ ] `go vet ./...` passes
-- [ ] Changes committed on feature branch
 - [ ] If gRPC added/modified: `docs/grpc/<module>/<service>_examples.md` created
 - [ ] If DB schema/migration: follows `.rules/database.md` (PK, audit fields, soft delete, indexes, comments, UP+DOWN)
 
@@ -216,11 +209,9 @@ Timestamp: [ISO-8601]
 
 ## Input
 - Task: [Task ID and name from tasks.md]
-- Branch: feature/<task-id>-<short-name>
 - Plan reference: .ai-agents/plan.md
 
 ## Process
-- Created branch: [branch name]
 - Files created: [N]
 - Files modified: [N]
 - Unit tests written: [N] test functions, [N] test cases
@@ -280,7 +271,6 @@ Timestamp: [ISO-8601]
 ## Task
 ID: [task-id]
 Name: [task name]
-Branch: feature/[task-id]-[short-name]
 
 ## Changed Files
 - [path/to/file.go] ([CREATE|MODIFY])

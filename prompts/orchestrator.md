@@ -85,7 +85,7 @@ All tasks done → DONE
    - Set state to "CODING"
 
 5. For each task in tasks.md (in order):
-   a. Run Agent Code → implements task on feature branch, writes tests
+   a. Run Agent Code → implements task, writes tests
       - Lint runs INLINE (gofmt, goimports, golangci-lint on changed files)
       - Set state to "SECURITY_SCANNING"
    b. Run Agent Security → scans changed packages for vulnerabilities
@@ -142,7 +142,6 @@ Read/write `.ai-agents/workflow-state.json` at every step:
   "max_security_fixes": 3,
   "created_at": "ISO-8601",
   "updated_at": "ISO-8601",
-  "branch": "feature/<task-name>",
   "reports": [
     "reports/1712341234_plan_agent.md",
     "reports/1712341250_task_agent.md"
@@ -160,22 +159,13 @@ Read/write `.ai-agents/workflow-state.json` at every step:
 ## Branch Strategy
 
 ```
-BEFORE Agent Code starts each task:
-  git checkout -b feature/<task-id>-<short-name>
-
-AFTER each task review passes:
-  - Commit all changes on feature branch
-  - Continue to next task on same or new branch
-
 AFTER pipeline completes:
-  - Stay on branch (DO NOT merge to main)
   - Report results to user
-  - User decides to merge or discard
+  - User decides when to commit or merge
 
 IF loop_count > max_loops:
-  - Keep branch for user review
   - Report all findings
-  - NEVER merge broken code to main
+  - NEVER commit or merge broken code
 ```
 
 ## Input Handling
@@ -240,7 +230,7 @@ If retry requested:
 
 - NEVER auto-push code to remote
 - NEVER merge to main branch
-- ALWAYS create feature branch before coding
+- NEVER create branches automatically
 - ALWAYS ask user before destructive git operations
 - Track all state changes in workflow-state.json
 - Track all reports in workflow-state.json reports array

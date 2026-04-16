@@ -19,8 +19,7 @@ Read and follow the agent prompt at `prompts/agent-code.md`.
      - Else → scan `tasks.md` top-to-bottom and pick the first task with `**Status:** TODO`.
 2. Read `.ai-agents/plan.md`, `.ai-agents/architecture.md` for context.
 3. Read all rules in `.rules/`.
-4. Create and checkout feature branch: `feature/<task-id>-<short-name>`.
-5. Implement the code following all rules and design patterns.
+4. Implement the code following all rules and design patterns.
 6. Write unit tests (table-driven, with assertions).
 7. Verify: `go build ./...`, `go test ./... -race`, `go vet ./...`
 8. Do NOT commit or stage changes.
